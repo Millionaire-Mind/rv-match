@@ -34,6 +34,7 @@ import {
   videoGenerationJobs,
 } from "@/server/db/schema";
 import { CATALOG } from "./catalog";
+import { evaluateSeedGuard } from "./production-guard";
 import { generatePlaceholderPhoto } from "@/server/media/placeholder-photo";
 import { uploadBuffer } from "@/server/storage";
 import { processQueuedVideoJobs } from "@/server/video/worker";
@@ -59,6 +60,11 @@ async function upsertLocalUser(email: string, fullName: string): Promise<string>
 }
 
 async function main() {
+  const guard = evaluateSeedGuard(process.env, process.argv);
+  if (guard.refuse) {
+    console.error(`\n${guard.reason}\n`);
+    process.exit(1);
+  }
   console.log("Seeding RV Match demo data...");
 
   // --- Clean slate for previously-seeded rows -------------------------
@@ -105,6 +111,7 @@ async function main() {
   ];
 
   const createdInventoryIds: string[] = [];
+  const simulatedDealerUploadInventoryIds: string[] = [];
   let firstLeadId: string | null = null;
   let firstDealershipId: string | null = null;
   let firstDealerOwnerId: string | null = null;
@@ -233,34 +240,28 @@ async function main() {
         .set({ primaryPhotoId: photoRows[0].id })
         .where(eq(inventory.id, rv.id));
 
-      // First RV per dealer simulates an authentic dealer-uploaded video
-      // (generated the same way for this demo, but tagged accordingly) to
-      // demonstrate that dealer video always outranks auto-generation.
-      if (i === 0) {
-        const buffer = await generatePlaceholderPhoto({
-          colorHex: entry.photoColors[0],
-          label: "Dealer Video",
-          sublabel: `${entry.year} ${entry.make} ${entry.model}`,
-        });
-        const url = await uploadBuffer(`videos/${rv.id}/dealer-upload.jpg`, buffer, "image/jpeg");
-        const [video] = await db
-          .insert(inventoryVideos)
-          .values({ inventoryId: rv.id, url, source: "dealer_upload", thumbnailUrl: url })
-          .returning({ id: inventoryVideos.id });
-        // NOTE: this is a placeholder still image standing in for a real
-        // dealer-recorded MP4 in this demo dataset — the important part
-        // for the pipeline is that inventory.primaryVideoId is dealer-set
-        // and no generation job is queued, matching production behavior.
-        await db.update(inventory).set({ primaryVideoId: video.id }).where(eq(inventory.id, rv.id));
-      } else {
-        await db.insert(videoGenerationJobs).values({ inventoryId: rv.id, status: "queued" });
-      }
+      // First RV per dealer simulates an authentic dealer-uploaded video to
+      // demonstrate that dealer video always outranks auto-generation. It
+      // must be a genuine playable MP4, not a still image mislabeled as a
+      // video — so this still goes through the same real FFmpeg pipeline
+      // as every other queued job; only its `source` tag gets flipped to
+      // "dealer_upload" afterward to simulate upload provenance, never the
+      // artifact itself.
+      await db.insert(videoGenerationJobs).values({ inventoryId: rv.id, status: "queued" });
+      if (i === 0) simulatedDealerUploadInventoryIds.push(rv.id);
     }
   }
 
   console.log(`Queued video generation for published inventory. Processing with FFmpeg...`);
   const jobResult = await processQueuedVideoJobs();
   console.log(`Video generation: ${jobResult.processed} completed, ${jobResult.failed} failed.`);
+
+  if (simulatedDealerUploadInventoryIds.length) {
+    await db
+      .update(inventoryVideos)
+      .set({ source: "dealer_upload" })
+      .where(inArray(inventoryVideos.inventoryId, simulatedDealerUploadInventoryIds));
+  }
 
   // --- Demo consumer with real behavioral history ----------------------
   const [anonSession] = await sql<{ id: string }[]>`

@@ -45,16 +45,17 @@ test.describe("Consumer journey", () => {
     await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
 
     await swipeTimes(page, 10, "ArrowRight");
-    await expect(page.getByText("Want to see RVs you can actually buy near you?")).toBeVisible({
+    const zipDialog = page.getByRole("dialog");
+    await expect(zipDialog.getByText("Want to see RVs you can actually buy near you?")).toBeVisible({
       timeout: 10000,
     });
-    await page.getByRole("textbox", { name: "ZIP code" }).fill("80202");
-    await page.getByRole("button", { name: "Save" }).click();
-    await page.waitForTimeout(500);
+    await zipDialog.getByRole("textbox", { name: "ZIP code" }).fill("80202");
+    await zipDialog.getByRole("button", { name: "Save" }).click();
+    await expect(zipDialog).not.toBeVisible({ timeout: 5000 });
 
     await swipeTimes(page, 10, "ArrowRight");
     await page.waitForURL(/\/match/, { timeout: 15000 });
-    await expect(page.getByText("Your RV Match")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your RV Match" })).toBeVisible();
     await expect(page.getByText("Top matching RVs available now")).toBeVisible();
   });
 
@@ -89,8 +90,13 @@ test.describe("Consumer journey", () => {
   }) => {
     await page.goto("/discover");
     await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
-    await page.getByRole("link", { name: "View full details" }).click();
+    await page.getByRole("link", { name: "View full details" }).first().click();
     await page.waitForURL(/\/rv\//, { timeout: 10000 });
+
+    const isRockyMountain = (await page.getByText("Rocky Mountain RV Center").count()) > 0;
+    const dealerEmail = isRockyMountain
+      ? "owner@rockymountainrv.example"
+      : "owner@sunshinestatervs.example";
 
     await page.getByRole("button", { name: "Check Availability" }).click();
     await page.getByLabel("Name").fill("E2E Test Lead");
@@ -102,11 +108,11 @@ test.describe("Consumer journey", () => {
     // The dealer should see it in their lead inbox.
     const dealerPage = await context.newPage();
     await dealerPage.goto("/dealer/login");
-    await dealerPage.getByLabel("Email").fill("owner@rockymountainrv.example");
+    await dealerPage.getByLabel("Email").fill(dealerEmail);
     await dealerPage.getByLabel("Password").fill(DEMO_PASSWORD);
     await dealerPage.getByRole("button", { name: "Sign in" }).click();
-    await dealerPage.waitForURL(/\/dealer/, { timeout: 15000 });
+    await dealerPage.waitForURL(/\/dealer$/, { timeout: 15000 });
     await dealerPage.goto("/dealer/leads");
-    await expect(dealerPage.getByText("E2E Test Lead")).toBeVisible({ timeout: 10000 });
+    await expect(dealerPage.getByText("E2E Test Lead").first()).toBeVisible({ timeout: 10000 });
   });
 });

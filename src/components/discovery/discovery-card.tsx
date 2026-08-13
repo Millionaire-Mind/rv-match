@@ -41,6 +41,7 @@ export function DiscoveryCard({ card, active, onDecision, onMilestone }: Discove
       onDragEnd={handleDragEnd}
       animate={controls}
       className="absolute inset-0 touch-none select-none overflow-hidden rounded-2xl shadow-2xl"
+      style={{ zIndex: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
       aria-label={`${card.year} ${card.make} ${card.model}`}
     >
       <VideoPlayer

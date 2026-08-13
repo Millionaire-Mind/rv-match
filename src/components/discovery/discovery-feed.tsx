@@ -128,8 +128,23 @@ export function DiscoveryFeed({
     toggleSaveInventory(currentCard.id, !isSaved).catch(() => undefined);
   }
 
+  // The keydown listener is attached once (see the effect below with an
+  // empty dependency array) rather than re-subscribed on every state
+  // change. Handlers close over component state that changes on every
+  // swipe (currentCard, locationKnown, etc.), so a naive effect keyed on
+  // "the state it uses" either re-subscribes constantly or — if a
+  // dependency is missed — silently keeps calling a stale closure (e.g.
+  // still thinking locationKnown=false after the ZIP prompt was saved,
+  // endlessly re-opening it). Routing every keypress through a ref that's
+  // updated on every render sidesteps both problems.
+  const latestHandlers = useRef({ handleDecision, handleMoreLikeThis, handleSave, currentCard });
+  useEffect(() => {
+    latestHandlers.current = { handleDecision, handleMoreLikeThis, handleSave, currentCard };
+  });
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      const { handleDecision, handleMoreLikeThis, handleSave, currentCard } = latestHandlers.current;
       if (!currentCard) return;
       if (e.target instanceof HTMLElement && ["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
       switch (e.key) {
@@ -156,8 +171,7 @@ export function DiscoveryFeed({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCard, savedIds]);
+  }, []);
 
   function handleMilestone(
     milestone: "started" | "25" | "50" | "75" | "complete" | "replayed",

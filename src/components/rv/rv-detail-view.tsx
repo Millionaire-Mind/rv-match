@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { VideoPlayer, videoMilestoneToEventType } from "@/components/discovery/video-player";
 import { LeadDialog } from "./lead-dialog";
 import { SaveShareButtons } from "./save-share-buttons";
+import { ShowMeSimilarButton } from "./show-me-similar-button";
 import { formatCurrency, formatDistance } from "@/lib/utils";
 import { rvTypeLabels, type RvType } from "@/server/validation/enums";
 import { recordClientEvent } from "@/server/discovery/actions";
@@ -227,6 +228,7 @@ export function RvDetailView({
           <Button variant="outline" className="w-full" onClick={() => openLead("request_best_price")}>
             Request Best Price
           </Button>
+          <ShowMeSimilarButton inventoryId={rv.id} />
           <SaveShareButtons
             inventoryId={rv.id}
             initialSaved={isSaved}

@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, sql } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 import { db } from "@/server/db/client";
 import { consumerProfiles, inventory, savedInventory, swipeDecisions } from "@/server/db/schema";
@@ -225,4 +226,22 @@ export async function getFitScoreFor(inventoryId: string) {
   const [rv] = await db.select().from(inventory).where(eq(inventory.id, inventoryId)).limit(1);
   if (!rv) return null;
   return scoreOneInventory(consumerProfileId, rv);
+}
+
+/**
+ * "Show Me Similar RVs" (from a traditional search result or an RV detail
+ * page) uses the selected RV as a preference input the same way MORE LIKE
+ * THIS does mid-swipe, then sends the consumer into personalized
+ * discovery - the required bridge from the search path back into the
+ * learning feed, not a second unrelated results list.
+ */
+export async function showMeSimilarRvs(inventoryId: string): Promise<void> {
+  const consumerProfileId = await getOrCreateConsumerProfileId();
+  const [rv] = await db.select().from(inventory).where(eq(inventory.id, inventoryId)).limit(1);
+  if (rv) {
+    const weights = await loadRecommendationWeights();
+    await applyPreferenceDelta(consumerProfileId, rv, weightForSwipeDecision("more_like_this", null, weights));
+    await trackEvent({ consumerProfileId, eventType: "show_me_similar", inventoryId, dealershipId: rv.dealershipId });
+  }
+  redirect("/discover");
 }

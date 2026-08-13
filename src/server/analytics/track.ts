@@ -25,7 +25,9 @@ export type BehavioralEventType =
   | "lead_started"
   | "lead_submitted"
   | "dealer_view"
-  | "account_created";
+  | "account_created"
+  | "search_performed"
+  | "show_me_similar";
 
 export interface TrackEventParams {
   consumerProfileId: string | null;

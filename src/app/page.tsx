@@ -41,6 +41,10 @@ export default function HomePage() {
         </Button>
 
         <p className="mt-4 text-xs text-white/40">No account needed. Just start watching.</p>
+
+        <Link href="/search" className="mt-6 text-sm text-white/60 underline underline-offset-4 hover:text-white">
+          I know what I want — search by filters instead
+        </Link>
       </div>
 
       <footer className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-6 pb-8 text-xs text-white/40">

@@ -26,7 +26,8 @@ describe("csvRowSchema", () => {
   });
 
   it("rejects a row missing a required field (stock_number)", () => {
-    const { stock_number: _omit, ...rest } = validRow;
+    const rest: Record<string, string> = { ...validRow };
+    delete rest.stock_number;
     const result = csvRowSchema.safeParse(rest);
     expect(result.success).toBe(false);
   });

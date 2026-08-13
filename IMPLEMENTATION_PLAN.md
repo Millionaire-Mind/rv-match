@@ -96,30 +96,37 @@ phase rather than assumed to already exist.
       shadcn CLI registry is not reachable from this sandboxed network, so
       components are authored directly in shadcn's own conventions),
       ESLint, Vitest, Playwright, Docker, branding config
-- [ ] Phase 3 — Database schema (scoped to the loop above): users,
+- [x] Phase 3 — Database schema (scoped to the loop above): users,
       dealerships, dealership_users, dealer_pilots, inventory +
       photos/videos/price history, video_generation_jobs,
       behavioral_events, consumer_preferences, swipe_decisions,
       saved_inventory, leads, lead_activity, attributed_sales,
       admin_configuration, audit_logs, anonymous_sessions
-- [ ] Phase 4 — Typed DB layer (Drizzle ORM) + Zod schemas
-- [ ] Phase 5 — Auth & authorization: Supabase Auth, anonymous session
+- [x] Phase 4 — Typed DB layer (Drizzle ORM) + Zod schemas
+- [x] Phase 5 — Auth & authorization: Supabase Auth, anonymous session
       cookie + merge-on-signup, dealer owner/staff roles, tenant isolation
-- [ ] Phase 6 — Consumer discovery feed
-- [ ] Phase 7 — Recommendation engine + preference profile + intent scoring
-- [ ] Phase 8 — RV Match results + location prompt
-- [ ] Phase 9 — RV detail page + saved RVs
-- [ ] Phase 10 — Lead capture + attribution
-- [ ] Phase 11 — Automatic video generation pipeline (FFmpeg)
-- [ ] Phase 12 — Dealer onboarding, inventory CRUD, CSV import
-- [ ] Phase 13 — Dealer dashboard: core analytics, lead inbox, sale
+- [x] Phase 6 — Consumer discovery feed
+- [x] Phase 7 — Recommendation engine + preference profile + intent scoring
+- [x] Phase 8 — RV Match results + location prompt
+- [x] Phase 9 — RV detail page + saved RVs
+- [x] Phase 10 — Lead capture + attribution
+- [x] Phase 11 — Automatic video generation pipeline (FFmpeg)
+- [x] Phase 12 — Dealer onboarding, inventory CRUD, CSV import
+- [x] Phase 13 — Dealer dashboard: core analytics, lead inbox, sale
       attribution, pilot tracking
-- [ ] Phase 14 — Basic platform admin
-- [ ] Phase 15 — PWA + responsive/accessibility pass
-- [ ] Phase 16 — Seed data script
-- [ ] Phase 17 — Unit/integration tests (Vitest)
-- [ ] Phase 18 — Playwright end-to-end tests
-- [ ] Phase 19 — Final quality audit, docs, lint/typecheck/test/build, push
+- [x] Phase 14 — Basic platform admin
+- [x] Phase 15 — PWA + responsive/accessibility pass
+- [x] Phase 16 — Seed data script (52 synthetic RVs across 2 dealerships)
+- [x] Phase 17 — Unit/integration tests (Vitest — 54 tests)
+- [x] Phase 18 — Playwright end-to-end tests (16 tests: consumer, dealer,
+      admin, security journeys)
+- [x] Phase 19 — Final quality audit, docs, lint/typecheck/test/build, push
+
+All 19 phases are complete. See the root `README.md` for how to run
+everything and the "Remaining Limitations" section of the final handoff for
+what's genuinely left to configure (real Supabase project, real SMTP,
+production hosting) versus what's actually unbuilt (see "Explicitly
+deferred" above).
 
 ## Known technical risks
 

@@ -122,6 +122,10 @@ export const anonymousSessions = pgTable("anonymous_sessions", {
   }),
   userAgent: text("user_agent"),
   firstSource: text("first_source").default("direct"),
+  /** Which campaign (QR/link/creator) first brought this browser to the
+   * site - set once at first creation, never overwritten by a later visit
+   * through a different link (see src/app/go/[code]/route.ts). */
+  firstCampaignId: uuid("first_campaign_id").references(() => distributionCampaigns.id, { onDelete: "set null" }),
 });
 
 export const consumerProfiles = pgTable("consumer_profiles", {
@@ -350,6 +354,35 @@ export const inventoryFeedRuns = pgTable("inventory_feed_runs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
+/** Lightweight creator/influencer identity - no payments, just who they are and whether they're still active. */
+export const creators = pgTable("creators", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  contactEmail: text("contact_email"),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A single campaign record backs every kind of shareable link: a QR code
+ * on a dealership's lot, a QR sticker on one specific RV's window, a
+ * generic dealer link, or a creator/influencer's referral link. All
+ * resolve through /go/{code} (src/app/go/[code]/route.ts), which is also
+ * where first-touch attribution actually gets recorded.
+ */
+export const distributionCampaigns = pgTable("distribution_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  dealershipId: uuid("dealership_id").references(() => dealerships.id, { onDelete: "cascade" }),
+  inventoryId: uuid("inventory_id").references(() => inventory.id, { onDelete: "cascade" }),
+  creatorId: uuid("creator_id").references(() => creators.id, { onDelete: "set null" }),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  campaignType: text("campaign_type").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const videoGenerationJobs = pgTable("video_generation_jobs", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   inventoryId: uuid("inventory_id")
@@ -449,6 +482,12 @@ export const leads = pgTable("leads", {
   behaviorSnapshot: jsonb("behavior_snapshot").notNull().default({}),
   status: leadStatusEnum("status").notNull().default("new"),
   assignedTo: uuid("assigned_to").references(() => profiles.id, { onDelete: "set null" }),
+  /** Frozen copy of the consumer's first-touch attribution as of lead
+   * submission (same "immutable snapshot" philosophy as behaviorSnapshot
+   * above) - never re-derived later, so editing a campaign afterward can't
+   * silently change what a past lead is attributed to. */
+  firstSource: text("first_source"),
+  firstCampaignId: uuid("first_campaign_id").references(() => distributionCampaigns.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -488,6 +527,11 @@ export const attributedSales = pgTable("attributed_sales", {
     .default("dealer_reported"),
   verifiedBy: uuid("verified_by").references(() => profiles.id, { onDelete: "set null" }),
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  /** Copied from the originating lead at sale-creation time, not
+   * re-derived - a sale's recorded attribution is exactly what its lead's
+   * was, permanently. */
+  firstSource: text("first_source"),
+  firstCampaignId: uuid("first_campaign_id").references(() => distributionCampaigns.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

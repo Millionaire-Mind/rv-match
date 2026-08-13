@@ -36,15 +36,46 @@ function usesRealSupabase(): boolean {
   return Boolean(url && !url.includes("your-project"));
 }
 
-function ensureAnonymousSession(request: NextRequest, response: NextResponse): void {
-  if (request.cookies.get(ANONYMOUS_COOKIE_NAME)?.value) return;
-  response.cookies.set(ANONYMOUS_COOKIE_NAME, crypto.randomUUID(), {
+/**
+ * On a first-time visitor, this must both (a) set the cookie the browser
+ * will carry from now on, and (b) make that same id visible to `cookies()`
+ * reads *within this same request* - a Route Handler (e.g. src/app/go/
+ * [code]/route.ts, which mints the anonymous_sessions DB row immediately,
+ * before any redirect) only ever sees the incoming request's cookies, not
+ * whatever this middleware writes onto its own response object. Writing
+ * only to `response.cookies` (the original implementation) left the two
+ * out of sync on a visitor's very first request: the id in the DB row
+ * created during that request and the id the browser actually ends up
+ * storing would silently differ, orphaning the DB row this request wrote
+ * to (breaking first-touch attribution for exactly the case - a fresh QR
+ * scan - it exists to capture). Mutating `request.cookies` and rebuilding
+ * the response from that mutated request (mirroring the already-correct
+ * @supabase/ssr pattern in refreshSupabaseSession below) keeps both
+ * in sync, the same way Server Component renders already behaved
+ * correctly without this fix.
+ */
+function ensureAnonymousSession(request: NextRequest, response: NextResponse): NextResponse {
+  if (request.cookies.get(ANONYMOUS_COOKIE_NAME)?.value) return response;
+
+  const id = crypto.randomUUID();
+  request.cookies.set(ANONYMOUS_COOKIE_NAME, id);
+  // NextResponse.next({ request }) builds a fresh response from the
+  // mutated request - any cookies already set on the incoming `response`
+  // (e.g. a refreshed Supabase auth cookie from refreshSupabaseSession)
+  // have to be carried forward explicitly, or this would silently drop
+  // them.
+  const updated = NextResponse.next({ request });
+  for (const cookie of response.cookies.getAll()) {
+    updated.cookies.set(cookie);
+  }
+  updated.cookies.set(ANONYMOUS_COOKIE_NAME, id, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });
+  return updated;
 }
 
 async function refreshSupabaseSession(request: NextRequest): Promise<NextResponse> {
@@ -73,13 +104,11 @@ async function refreshSupabaseSession(request: NextRequest): Promise<NextRespons
 export async function proxy(request: NextRequest) {
   if (usesRealSupabase()) {
     const response = await refreshSupabaseSession(request);
-    ensureAnonymousSession(request, response);
-    return response;
+    return ensureAnonymousSession(request, response);
   }
 
   const response = NextResponse.next();
-  ensureAnonymousSession(request, response);
-  return response;
+  return ensureAnonymousSession(request, response);
 }
 
 export const config = {

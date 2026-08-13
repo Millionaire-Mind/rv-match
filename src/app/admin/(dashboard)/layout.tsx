@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Settings, ShieldCheck, Store } from "lucide-react";
+import { LayoutDashboard, Settings, ShieldCheck, Sparkles, Store } from "lucide-react";
 
 import { requireAdminContext } from "@/server/admin/context";
 import { brand } from "@/config/brand";
@@ -13,6 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin", label: "Overview", icon: LayoutDashboard },
     { href: "/admin/dealers", label: "Dealers", icon: Store },
     { href: "/admin/sales", label: "Sale Verification", icon: ShieldCheck },
+    { href: "/admin/creators", label: "Creators", icon: Sparkles },
     { href: "/admin/config", label: "Configuration", icon: Settings },
   ];
 

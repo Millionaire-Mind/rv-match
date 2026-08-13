@@ -6,6 +6,7 @@ import { db } from "@/server/db/client";
 import {
   dealershipUsers,
   dealerships,
+  distributionCampaigns,
   inventory,
   inventoryFeedSources,
   inventoryVideos,
@@ -112,6 +113,21 @@ export async function requireFeedSourceInDealership(
     .limit(1);
   if (!row || row.dealershipId !== dealershipId) {
     throw new ForbiddenError("This feed source does not belong to your dealership.");
+  }
+  return row;
+}
+
+export async function requireCampaignInDealership(
+  dealershipId: string,
+  campaignId: string,
+): Promise<{ id: string; dealershipId: string | null }> {
+  const [row] = await db
+    .select({ id: distributionCampaigns.id, dealershipId: distributionCampaigns.dealershipId })
+    .from(distributionCampaigns)
+    .where(eq(distributionCampaigns.id, campaignId))
+    .limit(1);
+  if (!row || row.dealershipId !== dealershipId) {
+    throw new ForbiddenError("This campaign does not belong to your dealership.");
   }
   return row;
 }

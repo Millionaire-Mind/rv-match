@@ -10,6 +10,7 @@ import { trackEvent } from "@/server/analytics/track";
 import { loadIntentWeights } from "@/server/recommendation/config";
 import { computeIntentScore } from "@/server/recommendation/purchase-intent";
 import { getBehaviorSnapshot } from "@/server/recommendation/profile";
+import { getFirstTouchAttribution } from "@/server/attribution/first-touch";
 import { sendMail } from "@/server/email/mailer";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { formatCurrency } from "@/lib/utils";
@@ -60,7 +61,7 @@ export async function submitLead(
   if (!dealer) return { ok: false, error: "This dealership is no longer available." };
 
   const intentWeights = await loadIntentWeights();
-  const [intent, snapshot] = await Promise.all([
+  const [intent, snapshot, attribution] = await Promise.all([
     computeIntentScore({
       consumerProfileId,
       dealershipId: dealer.id,
@@ -68,6 +69,7 @@ export async function submitLead(
       weights: intentWeights,
     }),
     getBehaviorSnapshot(consumerProfileId),
+    getFirstTouchAttribution(consumerProfileId),
   ]);
 
   const [lead] = await db
@@ -86,6 +88,8 @@ export async function submitLead(
       intentScore: intent.score.toFixed(2),
       intentReasons: intent.reasons,
       behaviorSnapshot: snapshot,
+      firstSource: attribution.firstSource,
+      firstCampaignId: attribution.firstCampaignId,
     })
     .returning({ id: leads.id });
 

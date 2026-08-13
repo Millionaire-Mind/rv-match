@@ -82,4 +82,27 @@ describe("proxy (middleware)", () => {
 
     expect(response.cookies.get("rvm_session")).toBeUndefined(); // not re-set - already present on the request
   });
+
+  it("mints an anonymous session id visible to a downstream cookies() read within the same request, not just the outgoing response", async () => {
+    // Regression test: the original implementation only wrote the freshly
+    // minted id onto `response.cookies`, never onto `request.cookies`. A
+    // Route Handler in this same request (e.g. src/app/go/[code]/route.ts,
+    // which reads the anonymous session cookie via next/headers' cookies()
+    // - backed by the incoming request - to mint the anonymous_sessions DB
+    // row before redirecting) would then see no cookie at all and generate
+    // an independent, different random id, silently orphaning whatever
+    // that request just wrote to the database under the "wrong" id versus
+    // what the browser actually ends up storing going forward.
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://your-project.supabase.co";
+
+    const request = new NextRequest("http://localhost:3000/go/some-code");
+    const response = await proxy(request);
+
+    const mintedId = response.cookies.get("rvm_session")?.value;
+    expect(mintedId).toBeTruthy();
+    // The same id must now also be readable directly off the (mutated)
+    // request object, which is what a downstream Route Handler/Server
+    // Component's cookies() read is ultimately backed by.
+    expect(request.cookies.get("rvm_session")?.value).toBe(mintedId);
+  });
 });

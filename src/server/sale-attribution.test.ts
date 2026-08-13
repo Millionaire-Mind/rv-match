@@ -2,7 +2,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { attributedSales, dealerPilots, dealerships, dealershipUsers, inventory, leads, profiles } from "@/server/db/schema";
+import {
+  attributedSales,
+  dealerPilots,
+  dealerships,
+  dealershipUsers,
+  distributionCampaigns,
+  inventory,
+  leads,
+  profiles,
+} from "@/server/db/schema";
 
 /**
  * Integration tests for sale-attribution integrity (Phase 1C):
@@ -48,7 +57,7 @@ function soldForm(fields: Record<string, string>): FormData {
   return fd;
 }
 
-async function createLead(inventoryId: string) {
+async function createLead(inventoryId: string, attribution?: { firstSource: string; firstCampaignId: string }) {
   const [lead] = await db
     .insert(leads)
     .values({
@@ -57,6 +66,8 @@ async function createLead(inventoryId: string) {
       name: "Test Shopper",
       email: "shopper@example.com",
       ctaType: "check_availability",
+      firstSource: attribution?.firstSource,
+      firstCampaignId: attribution?.firstCampaignId,
     })
     .returning({ id: leads.id });
   return lead.id;
@@ -178,6 +189,25 @@ describe("markLeadSold", () => {
 
     const sales = await db.select().from(attributedSales).where(eq(attributedSales.leadId, leadId));
     expect(sales).toHaveLength(1);
+  });
+
+  it("copies the lead's frozen first-touch attribution onto the sale it produces", async () => {
+    asUser(dealerUserId);
+    const [campaign] = await db
+      .insert(distributionCampaigns)
+      .values({ dealershipId, code: `sale-attr-${Date.now()}`, name: "Test Campaign", campaignType: "dealer_general" })
+      .returning({ id: distributionCampaigns.id });
+    const leadId = await createLead(invAId, { firstSource: "qr", firstCampaignId: campaign.id });
+
+    await markLeadSold(dealershipId, leadId, { ok: false, error: "" }, soldForm({ soldInventoryId: invAId, saleDate: "2026-08-01" }));
+
+    const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
+    const [sale] = await db.select().from(attributedSales).where(eq(attributedSales.leadId, leadId));
+    expect(sale.firstSource).toBe(lead.firstSource);
+    expect(sale.firstSource).toBe("qr");
+    expect(sale.firstCampaignId).toBe(campaign.id);
+
+    await db.delete(distributionCampaigns).where(eq(distributionCampaigns.id, campaign.id));
   });
 });
 

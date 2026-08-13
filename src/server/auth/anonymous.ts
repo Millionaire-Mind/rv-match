@@ -17,13 +17,29 @@ import { authGetUserId } from "./provider";
  * also called from plain Server Component renders (e.g. the /discover
  * page loading its first batch), where a cookie write would throw.
  */
-export async function getOrCreateAnonymousSessionId(): Promise<string> {
+/**
+ * `attribution`, when supplied, only ever takes effect on this session id's
+ * very first creation - the onConflictDoUpdate branch below deliberately
+ * never touches firstSource/firstCampaignId, so a returning visitor who
+ * later lands through a different campaign link never overwrites their
+ * original first-touch attribution. Only src/app/go/[code]/route.ts (the
+ * campaign-link resolver) ever passes this; every other caller gets the
+ * plain "direct"/no-campaign default.
+ */
+export async function getOrCreateAnonymousSessionId(attribution?: {
+  firstSource: string;
+  firstCampaignId?: string;
+}): Promise<string> {
   const cookieStore = await cookies();
   const id = cookieStore.get(ANONYMOUS_COOKIE_NAME)?.value ?? crypto.randomUUID();
 
   const [row] = await db
     .insert(anonymousSessions)
-    .values({ id })
+    .values({
+      id,
+      firstSource: attribution?.firstSource,
+      firstCampaignId: attribution?.firstCampaignId,
+    })
     .onConflictDoUpdate({
       target: anonymousSessions.id,
       set: { lastSeenAt: new Date() },

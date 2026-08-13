@@ -157,6 +157,10 @@ export async function markLeadSold(
         salespersonId: userId,
         notes: d.notes || null,
         verificationStatus: "dealer_reported",
+        // Copied from the lead, not re-derived - the sale's attribution is
+        // permanently whatever the lead's was at submission time.
+        firstSource: lead.firstSource,
+        firstCampaignId: lead.firstCampaignId,
       });
 
       await tx

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, ListChecks, Package, UserCog, Users } from "lucide-react";
+import { BarChart3, LayoutDashboard, ListChecks, Package, UserCog, Users } from "lucide-react";
 
 import { requireDealerContext } from "@/server/dealer/context";
 import { getPilotSummary } from "@/server/dealer/analytics";
@@ -20,6 +20,7 @@ export default async function DealerDashboardLayout({ children }: { children: Re
   const nav = [
     { href: "/dealer", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dealer/inventory", label: "Inventory", icon: Package },
+    { href: "/dealer/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/dealer/leads", label: "Leads", icon: Users },
     { href: "/dealer/pilot", label: "Pilot", icon: ListChecks },
     ...(role === "owner" ? [{ href: "/dealer/team", label: "Team", icon: UserCog }] : []),

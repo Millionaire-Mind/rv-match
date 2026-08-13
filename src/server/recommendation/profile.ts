@@ -12,7 +12,7 @@ export interface PreferenceHighlight {
   strength: number; // 0-100, a normalized *preference score*, not a probability
 }
 
-const ATTRIBUTE_LABELS: Record<string, (value: string) => string> = {
+export const ATTRIBUTE_LABELS: Record<string, (value: string) => string> = {
   rv_type: (v) => rvTypeLabels[v as RvType] ?? v,
   make: (v) => v,
   bunkhouse: () => "Bunkhouse",

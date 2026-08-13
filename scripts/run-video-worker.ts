@@ -3,6 +3,8 @@
  * In production, run this on a schedule (cron every 1-2 minutes) or as a
  * long-lived loop — see README.md "Video generation worker".
  */
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env.local" });
 import { processQueuedVideoJobs } from "@/server/video/worker";
 
 async function main() {

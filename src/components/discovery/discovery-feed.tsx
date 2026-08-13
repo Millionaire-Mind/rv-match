@@ -42,7 +42,7 @@ export function DiscoveryFeed({
   const [locationKnown, setLocationKnown] = useState(hasLocation);
   const [learningToast, setLearningToast] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const swipeStartedAt = useRef<number>(Date.now());
+  const swipeStartedAt = useRef<number>(0);
   const fetchingRef = useRef(false);
   const learningShown = useRef(false);
 

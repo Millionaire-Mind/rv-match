@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { motion, useAnimation, type PanInfo } from "framer-motion";
-import { MapPin } from "lucide-react";
+import { ChevronUp, MapPin } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDistance } from "@/lib/utils";
@@ -83,6 +84,13 @@ export function DiscoveryCard({ card, active, onDecision, onMilestone }: Discove
             {card.distanceMiles !== null ? ` · ${formatDistance(card.distanceMiles)}` : ""}
           </span>
         </div>
+        <Link
+          href={`/rv/${card.id}`}
+          className="pointer-events-auto mt-3 inline-flex items-center gap-1 text-sm font-medium text-white underline underline-offset-4"
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+          View full details
+        </Link>
       </div>
     </motion.article>
   );

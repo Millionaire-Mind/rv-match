@@ -73,26 +73,33 @@ export async function getOrCreateConsumerProfileId(): Promise<string> {
       return byAnon.id;
     }
 
+    // Insert-or-return via ON CONFLICT rather than select-then-insert: two
+    // concurrent requests for the same first-time user (e.g. a page
+    // prefetch racing the real navigation) would otherwise both see "no
+    // row" and both try to insert, violating the unique constraint on
+    // user_id. The upsert makes this atomic.
     const [created] = await db
       .insert(consumerProfiles)
       .values({ userId })
+      .onConflictDoUpdate({
+        target: consumerProfiles.userId,
+        set: { updatedAt: new Date() },
+      })
       .returning({ id: consumerProfiles.id });
     return created.id;
   }
 
   const anonymousSessionId = await getOrCreateAnonymousSessionId();
-  const [byAnon] = await db
-    .select({ id: consumerProfiles.id })
-    .from(consumerProfiles)
-    .where(eq(consumerProfiles.anonymousSessionId, anonymousSessionId))
-    .limit(1);
-  if (byAnon) return byAnon.id;
-
-  const [created] = await db
+  // Same race as above, keyed on anonymous_session_id instead.
+  const [row] = await db
     .insert(consumerProfiles)
     .values({ anonymousSessionId })
+    .onConflictDoUpdate({
+      target: consumerProfiles.anonymousSessionId,
+      set: { updatedAt: new Date() },
+    })
     .returning({ id: consumerProfiles.id });
-  return created.id;
+  return row.id;
 }
 
 export async function getCurrentProfile() {

@@ -12,9 +12,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:local:setup": "bash scripts/db/local-bootstrap.sh",
-    "db:migrate": "tsx scripts/db/migrate.ts",
-    "db:seed": "tsx scripts/seed/index.ts",
-    "video:worker": "tsx scripts/run-video-worker.ts"
+    "db:migrate": "dotenv -e .env.local -- tsx scripts/db/migrate.ts",
+    "db:seed": "dotenv -e .env.local -- tsx scripts/seed/index.ts",
+    "video:worker": "dotenv -e .env.local -- tsx scripts/run-video-worker.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.20",
@@ -70,6 +70,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.5",
     "dotenv": "^17.4.2",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",

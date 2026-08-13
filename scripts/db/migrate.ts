@@ -6,6 +6,8 @@
  * (documented in README.md); this script is a portable fallback that works
  * against any plain Postgres 15+ connection string.
  */
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env.local" });
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import postgres from "postgres";

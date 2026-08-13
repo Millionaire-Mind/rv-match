@@ -141,7 +141,7 @@ function scoreCandidate(
   return { fitScore, explanations, withinRadius: dist.withinRadius, distanceMiles: dist.miles };
 }
 
-function explainAttribute(attribute: string, value: string): string {
+export function explainAttribute(attribute: string, value: string): string {
   switch (attribute) {
     case "rv_type":
       return `You like ${value.replace(/_/g, " ")}s`;

@@ -1,63 +1,23 @@
 "use server";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import {
-  consumerProfiles,
-  dealerships,
-  inventory,
-  inventoryPhotos,
-  savedInventory,
-  swipeDecisions,
-} from "@/server/db/schema";
+import { consumerProfiles, inventory, savedInventory, swipeDecisions } from "@/server/db/schema";
 import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { getDiscoveryBatch, scoreOneInventory } from "@/server/recommendation/engine";
 import { loadRecommendationWeights } from "@/server/recommendation/config";
 import { updatePreferencesForSwipe, updatePreferencesForEvent } from "@/server/recommendation/preferences";
 import { trackEvent, type BehavioralEventType } from "@/server/analytics/track";
-import { toDiscoveryCardDTO, type DiscoveryCardDTO } from "./dto";
+import { hydrateScoredInventory } from "./hydrate";
+import type { DiscoveryCardDTO } from "./dto";
 import { swipeDecisionSchema } from "@/server/validation/enums";
 import { z } from "zod";
-
-async function hydrateCards(
-  scored: Awaited<ReturnType<typeof getDiscoveryBatch>>,
-): Promise<DiscoveryCardDTO[]> {
-  if (scored.length === 0) return [];
-
-  const dealerIds = [...new Set(scored.map((s) => s.inventory.dealershipId))];
-  const dealerRows = await db
-    .select({ id: dealerships.id, name: dealerships.name })
-    .from(dealerships)
-    .where(inArray(dealerships.id, dealerIds));
-  const dealerMap = new Map(dealerRows.map((d) => [d.id, d]));
-
-  const invIds = scored.map((s) => s.inventory.id);
-  const photoRows = await db
-    .select()
-    .from(inventoryPhotos)
-    .where(inArray(inventoryPhotos.inventoryId, invIds))
-    .orderBy(inventoryPhotos.position);
-  const photosByInv = new Map<string, string[]>();
-  for (const p of photoRows) {
-    const list = photosByInv.get(p.inventoryId) ?? [];
-    list.push(p.url);
-    photosByInv.set(p.inventoryId, list);
-  }
-
-  return scored.map((s) =>
-    toDiscoveryCardDTO(
-      s,
-      dealerMap.get(s.inventory.dealershipId) ?? { id: s.inventory.dealershipId, name: "RV Dealer" },
-      photosByInv.get(s.inventory.id) ?? (s.primaryPhotoUrl ? [s.primaryPhotoUrl] : []),
-    ),
-  );
-}
 
 export async function fetchDiscoveryBatch(limit = 8): Promise<DiscoveryCardDTO[]> {
   const consumerProfileId = await getOrCreateConsumerProfileId();
   const scored = await getDiscoveryBatch(consumerProfileId, limit);
-  return hydrateCards(scored);
+  return hydrateScoredInventory(scored);
 }
 
 export async function startDiscoverySession(): Promise<void> {

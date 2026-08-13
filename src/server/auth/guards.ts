@@ -3,7 +3,15 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { dealershipUsers, dealerships, inventory, inventoryVideos, profiles, videoGenerationJobs } from "@/server/db/schema";
+import {
+  dealershipUsers,
+  dealerships,
+  inventory,
+  inventoryFeedSources,
+  inventoryVideos,
+  profiles,
+  videoGenerationJobs,
+} from "@/server/db/schema";
 import { authGetUserId } from "./provider";
 import { ALL_DEALER_ROLES } from "@/server/dealer/permissions";
 import type { DealerRole } from "@/server/validation/enums";
@@ -93,6 +101,21 @@ export async function requireDealerRole(
  * primary-video selection, video generation) must call this first, or a
  * dealer could reach another dealership's inventory by ID substitution.
  */
+export async function requireFeedSourceInDealership(
+  dealershipId: string,
+  feedSourceId: string,
+): Promise<{ id: string; dealershipId: string }> {
+  const [row] = await db
+    .select({ id: inventoryFeedSources.id, dealershipId: inventoryFeedSources.dealershipId })
+    .from(inventoryFeedSources)
+    .where(eq(inventoryFeedSources.id, feedSourceId))
+    .limit(1);
+  if (!row || row.dealershipId !== dealershipId) {
+    throw new ForbiddenError("This feed source does not belong to your dealership.");
+  }
+  return row;
+}
+
 export async function requireInventoryInDealership(
   dealershipId: string,
   inventoryId: string,

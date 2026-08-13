@@ -85,6 +85,16 @@ export const csvRowSchema = z.object({
 
 export type CsvRowInput = z.infer<typeof csvRowSchema>;
 
+export const feedSourceSchema = z.object({
+  name: z.string().trim().min(1, "Name is required.").max(200),
+  format: z.enum(["csv", "json", "xml"]),
+  url: z.string().trim().url("Enter a valid URL."),
+  fieldMapping: z.record(z.string(), z.string()).default({}),
+  recordPath: z.string().trim().max(200).optional(),
+  refreshIntervalMinutes: z.coerce.number().int().positive().optional(),
+});
+export type FeedSourceInput = z.infer<typeof feedSourceSchema>;
+
 export const CSV_TEMPLATE_HEADERS = [
   "stock_number",
   "vin",

@@ -15,7 +15,9 @@
     "db:migrate": "dotenv -e .env.local -- tsx scripts/db/migrate.ts",
     "db:seed": "dotenv -e .env.local -- tsx scripts/seed/index.ts",
     "video:worker": "dotenv -e .env.local -- tsx scripts/run-video-worker.ts",
-    "video:worker:daemon": "dotenv -e .env.local -- tsx scripts/run-video-worker.ts --loop"
+    "video:worker:daemon": "dotenv -e .env.local -- tsx scripts/run-video-worker.ts --loop",
+    "feed:worker": "dotenv -e .env.local -- tsx scripts/run-feed-import.ts",
+    "feed:worker:daemon": "dotenv -e .env.local -- tsx scripts/run-feed-import.ts --loop"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

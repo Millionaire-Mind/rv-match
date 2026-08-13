@@ -19,6 +19,9 @@ export default async function DealerInventoryPage() {
         <h1 className="text-2xl font-semibold">Inventory</h1>
         <div className="flex gap-2">
           <Button asChild variant="outline">
+            <Link href="/dealer/inventory/feeds">Feed Sources</Link>
+          </Button>
+          <Button asChild variant="outline">
             <Link href="/dealer/inventory/import">Import CSV</Link>
           </Button>
           <Button asChild variant="accent">

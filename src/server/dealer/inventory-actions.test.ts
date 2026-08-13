@@ -197,3 +197,60 @@ describe("dealer inventory ownership guard (IDOR)", () => {
     expect(row.primaryVideoId).toBe(videoAId);
   });
 });
+
+describe("publishing requires a video (Phase 4: video-first)", () => {
+  it("refuses to publish an RV with no video and leaves it in draft", async () => {
+    asUser(userAId);
+    const [noVideoRv] = await db
+      .insert(inventory)
+      .values({
+        dealershipId: dealershipAId,
+        stockNumber: `A-NOVIDEO-${Date.now()}`,
+        year: 2024,
+        make: "Forest River",
+        model: "No Video",
+        rvType: "travel_trailer",
+        condition: "new",
+        salePriceCents: 3000000,
+        status: "draft",
+        source: "manual",
+      })
+      .returning({ id: inventory.id });
+
+    const result = await setInventoryStatus(dealershipAId, noVideoRv.id, "published");
+    expect(result.ok).toBe(false);
+
+    const [row] = await db.select({ status: inventory.status }).from(inventory).where(eq(inventory.id, noVideoRv.id));
+    expect(row.status).toBe("draft");
+  });
+
+  it("allows publishing once a video is attached", async () => {
+    asUser(userAId);
+    const [rv] = await db
+      .insert(inventory)
+      .values({
+        dealershipId: dealershipAId,
+        stockNumber: `A-HASVIDEO-${Date.now()}`,
+        year: 2024,
+        make: "Forest River",
+        model: "Has Video",
+        rvType: "travel_trailer",
+        condition: "new",
+        salePriceCents: 3000000,
+        status: "draft",
+        source: "manual",
+      })
+      .returning({ id: inventory.id });
+    const [video] = await db
+      .insert(inventoryVideos)
+      .values({ inventoryId: rv.id, url: "/media/videos/has-video.mp4", source: "dealer_upload" })
+      .returning({ id: inventoryVideos.id });
+    await db.update(inventory).set({ primaryVideoId: video.id }).where(eq(inventory.id, rv.id));
+
+    const result = await setInventoryStatus(dealershipAId, rv.id, "published");
+    expect(result.ok).toBe(true);
+
+    const [row] = await db.select({ status: inventory.status }).from(inventory).where(eq(inventory.id, rv.id));
+    expect(row.status).toBe("published");
+  });
+});

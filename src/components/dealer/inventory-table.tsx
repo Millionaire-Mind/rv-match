@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -31,10 +31,13 @@ const statusVariant: Record<Row["status"], "secondary" | "accent" | "outline" | 
 export function InventoryTable({ dealershipId, rows }: { dealershipId: string; rows: Row[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function changeStatus(id: string, status: Row["status"]) {
+    setError(null);
     startTransition(async () => {
-      await setInventoryStatus(dealershipId, id, status);
+      const result = await setInventoryStatus(dealershipId, id, status);
+      if (!result.ok && result.error) setError(result.error);
       router.refresh();
     });
   }
@@ -48,7 +51,9 @@ export function InventoryTable({ dealershipId, rows }: { dealershipId: string; r
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
+    <div className="space-y-3">
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full min-w-[720px] text-sm">
         <thead className="bg-secondary/60 text-left text-xs uppercase text-muted-foreground">
           <tr>
@@ -95,7 +100,8 @@ export function InventoryTable({ dealershipId, rows }: { dealershipId: string; r
                     <Button
                       size="sm"
                       variant="accent"
-                      disabled={pending}
+                      disabled={pending || !rv.hasVideo}
+                      title={rv.hasVideo ? undefined : "This RV needs a video before it can be published."}
                       onClick={() => changeStatus(rv.id, "published")}
                     >
                       Publish
@@ -137,6 +143,7 @@ export function InventoryTable({ dealershipId, rows }: { dealershipId: string; r
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import { inventoryFormSchema } from "@/server/validation/inventory";
 import { uploadBuffer } from "@/server/storage";
 import { logAudit } from "@/server/audit/log";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
+import { validateAndNormalizeUploadedVideo } from "@/server/video/validate";
 
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024; // 300MB
@@ -203,13 +204,38 @@ export async function updateInventory(
   return { ok: true, inventoryId };
 }
 
+/**
+ * RV Match is video-first: an RV cannot be published into the consumer
+ * discovery feed / Match results / search without a video already
+ * attached. This mirrors the read-side filter in
+ * src/server/inventory/eligibility.ts's discoveryEligible() - that filter
+ * is the real enforcement (it protects against a published-then-video-
+ * removed edge case too), this is the write-side check so a dealer gets a
+ * clear, immediate reason instead of just wondering why a "published" RV
+ * never shows up for consumers.
+ */
 export async function setInventoryStatus(
   dealershipId: string,
   inventoryId: string,
   status: "draft" | "published" | "sold" | "archived",
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
+
+  if (status === "published") {
+    const [row] = await db
+      .select({ primaryVideoId: inventory.primaryVideoId })
+      .from(inventory)
+      .where(eq(inventory.id, inventoryId))
+      .limit(1);
+    if (!row?.primaryVideoId) {
+      return {
+        ok: false,
+        error: "This RV needs a video before it can be published. Upload a video or generate one automatically.",
+      };
+    }
+  }
+
   await db
     .update(inventory)
     .set({ status, dateSold: status === "sold" ? new Date() : undefined })
@@ -222,6 +248,7 @@ export async function setInventoryStatus(
   });
   revalidatePath("/dealer/inventory");
   revalidatePath(`/dealer/inventory/${inventoryId}`);
+  return { ok: true };
 }
 
 export async function uploadInventoryPhotos(
@@ -289,12 +316,27 @@ export async function uploadInventoryVideo(
     return { ok: false, error: `Video exceeds the ${MAX_VIDEO_BYTES / 1024 / 1024}MB limit.` };
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const url = await uploadBuffer(`videos/${inventoryId}/${Date.now()}.mp4`, buffer, file.type || "video/mp4");
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
+  // The browser-supplied MIME type above is trivially spoofable and proves
+  // nothing about the actual file contents. Inspect the real video stream
+  // (magic-byte-level validation via ffprobe) before trusting it, and
+  // normalize it into the required vertical frame if it isn't one already
+  // instead of rejecting real dealer footage just for being landscape.
+  const validated = await validateAndNormalizeUploadedVideo(rawBuffer);
+  if (!validated.ok) {
+    return { ok: false, error: validated.error };
+  }
+
+  const url = await uploadBuffer(`videos/${inventoryId}/${Date.now()}.mp4`, validated.buffer, "video/mp4");
 
   const [video] = await db
     .insert(inventoryVideos)
-    .values({ inventoryId, url, source: "dealer_upload" })
+    .values({
+      inventoryId,
+      url,
+      source: "dealer_upload",
+      durationSeconds: validated.durationSeconds != null ? validated.durationSeconds.toFixed(2) : undefined,
+    })
     .returning({ id: inventoryVideos.id });
 
   // Dealer-uploaded video always takes priority over any generated video.

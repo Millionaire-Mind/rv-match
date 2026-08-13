@@ -1,10 +1,11 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
 import { inventory, inventoryPhotos, inventoryVideos } from "@/server/db/schema";
 import { loadPreferenceMap, normalizedAttributeScore } from "./preferences";
 import { attributesForInventory } from "./attributes";
 import { explainAttribute, type ScoredInventory } from "./engine";
+import { discoveryEligible } from "@/server/inventory/eligibility";
 
 /**
  * Top matches for the Match Results page: scores *all* published
@@ -19,7 +20,7 @@ export async function getTopMatches(consumerProfileId: string, limit = 12): Prom
   const candidates = await db
     .select()
     .from(inventory)
-    .where(eq(inventory.status, "published"))
+    .where(discoveryEligible())
     .orderBy(desc(inventory.dateAdded))
     .limit(500);
 
@@ -51,16 +52,21 @@ export async function getTopMatches(consumerProfileId: string, limit = 12): Prom
 
   const photoByInv = new Map<string, string>();
   for (const p of photoRows) if (!photoByInv.has(p.inventoryId)) photoByInv.set(p.inventoryId, p.url);
-  const videoByInv = new Map<string, string>();
-  for (const v of videoRows) if (v.url) videoByInv.set(v.inventoryId, v.url);
 
-  return top.map(({ rv, fitScore, explanations }) => ({
-    inventory: rv,
-    primaryPhotoUrl: photoByInv.get(rv.id) ?? null,
-    primaryVideoUrl: videoByInv.get(rv.id) ?? null,
-    fitScore,
-    isExploration: false,
-    explanations,
-    distanceMiles: null,
-  }));
+  return top.map(({ rv, fitScore, explanations }) => {
+    // Match the RV's actual primaryVideoId, not just any video row for this
+    // inventory id - an RV can have both a dealer-uploaded and a generated
+    // video, and only primaryVideoId says which one is authoritative.
+    const primaryVideo = videoRows.find((v) => v.id === rv.primaryVideoId) ?? videoRows.find((v) => v.inventoryId === rv.id);
+    return {
+      inventory: rv,
+      primaryPhotoUrl: photoByInv.get(rv.id) ?? null,
+      primaryVideoUrl: primaryVideo?.url ?? null,
+      primaryVideoCaptionUrl: primaryVideo?.captionUrl ?? null,
+      fitScore,
+      isExploration: false,
+      explanations,
+      distanceMiles: null,
+    };
+  });
 }

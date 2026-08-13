@@ -47,6 +47,7 @@ export function DiscoveryCard({ card, active, onDecision, onMilestone }: Discove
       <VideoPlayer
         src={card.videoUrl}
         poster={card.photos[0] ?? null}
+        captionSrc={card.videoCaptionUrl}
         active={active}
         className="h-full w-full"
         onMilestone={onMilestone}

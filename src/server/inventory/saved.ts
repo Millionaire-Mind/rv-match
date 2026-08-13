@@ -14,6 +14,7 @@ export interface SavedCardData {
   priceCents: number;
   status: "draft" | "published" | "sold" | "archived";
   photoUrl: string | null;
+  hasVideo: boolean;
   dealerName: string;
   fitScore: number | null;
   savedAt: Date;
@@ -64,6 +65,7 @@ export async function getSavedInventory(): Promise<SavedCardData[]> {
       priceCents: rv.advertisedPriceCents ?? rv.salePriceCents,
       status: rv.status,
       photoUrl: photoByInv.get(rv.id) ?? null,
+      hasVideo: Boolean(rv.primaryVideoId),
       dealerName: dealerMap.get(rv.dealershipId) ?? "RV Dealer",
       fitScore: match.fitScore,
       savedAt: row.savedAt,

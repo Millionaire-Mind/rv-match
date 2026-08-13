@@ -9,6 +9,7 @@ import {
   swipeDecisions,
 } from "@/server/db/schema";
 import { haversineMiles } from "@/server/geo/zip-centroids";
+import { discoveryEligible } from "@/server/inventory/eligibility";
 import { attributesForInventory, type InventoryRow } from "./attributes";
 import { loadRecommendationWeights, type RecommendationWeights } from "./config";
 import { loadPreferenceMap, normalizedAttributeScore, type PreferenceMap } from "./preferences";
@@ -17,6 +18,7 @@ export interface ScoredInventory {
   inventory: InventoryRow;
   primaryPhotoUrl: string | null;
   primaryVideoUrl: string | null;
+  primaryVideoCaptionUrl: string | null;
   fitScore: number; // 0-100
   isExploration: boolean;
   explanations: string[];
@@ -188,7 +190,7 @@ export async function getDiscoveryBatch(
     .from(inventory)
     .where(
       and(
-        eq(inventory.status, "published"),
+        discoveryEligible(),
         swipedIds.length > 0 ? notInArray(inventory.id, swipedIds) : undefined,
       ),
     )
@@ -235,6 +237,7 @@ export async function getDiscoveryBatch(
       inventory: rv,
       primaryPhotoUrl: primaryPhoto?.url ?? null,
       primaryVideoUrl: primaryVideo?.url ?? null,
+      primaryVideoCaptionUrl: primaryVideo?.captionUrl ?? null,
       fitScore,
       isExploration: exploration.some((e) => e.rv.id === rv.id),
       explanations,

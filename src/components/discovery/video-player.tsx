@@ -1,21 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
+import { Captions, CaptionsOff, Volume2, VolumeX } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 interface VideoPlayerProps {
   src: string | null;
   poster: string | null;
+  captionSrc?: string | null;
   active: boolean;
   className?: string;
   onMilestone?: (milestone: "started" | "25" | "50" | "75" | "complete" | "replayed") => void;
 }
 
-export function VideoPlayer({ src, poster, active, className, onMilestone }: VideoPlayerProps) {
+export function VideoPlayer({ src, poster, captionSrc, active, className, onMilestone }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const trackRef = useRef<HTMLTrackElement>(null);
   const [muted, setMuted] = useState(true);
+  const [captionsOn, setCaptionsOn] = useState(true);
   const milestonesFired = useRef(new Set<string>());
   const hasCompletedOnce = useRef(false);
   const hasStarted = useRef(false);
@@ -36,6 +39,12 @@ export function VideoPlayer({ src, poster, active, className, onMilestone }: Vid
       video.pause();
     }
   }, [active, src]);
+
+  useEffect(() => {
+    const track = trackRef.current?.track;
+    if (!track) return;
+    track.mode = captionsOn && captionSrc ? "showing" : "hidden";
+  }, [captionsOn, captionSrc]);
 
   function fireOnce(key: string, milestone: Parameters<NonNullable<typeof onMilestone>>[0]) {
     if (milestonesFired.current.has(key)) return;
@@ -96,7 +105,22 @@ export function VideoPlayer({ src, poster, active, className, onMilestone }: Vid
         className="h-full w-full object-cover"
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
-      />
+      >
+        {captionSrc && (
+          <track ref={trackRef} kind="captions" src={captionSrc} srcLang="en" label="English" default />
+        )}
+      </video>
+      {captionSrc && (
+        <button
+          type="button"
+          onClick={() => setCaptionsOn((c) => !c)}
+          aria-label={captionsOn ? "Turn off captions" : "Turn on captions"}
+          aria-pressed={captionsOn}
+          className="absolute right-4 top-16 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
+        >
+          {captionsOn ? <Captions className="h-5 w-5" /> : <CaptionsOff className="h-5 w-5" />}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setMuted((m) => !m)}

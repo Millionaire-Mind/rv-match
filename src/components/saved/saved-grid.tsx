@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { PlayCircle, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,11 @@ export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
             {item.photoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.photoUrl} alt="" className="h-full w-full object-cover" />
+            )}
+            {item.hasVideo && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
+                <PlayCircle className="h-12 w-12 text-white drop-shadow" strokeWidth={1.5} />
+              </div>
             )}
             <button
               type="button"

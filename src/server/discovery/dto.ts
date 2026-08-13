@@ -23,6 +23,7 @@ export interface DiscoveryCardDTO {
   dealerId: string;
   photos: string[];
   videoUrl: string | null;
+  videoCaptionUrl: string | null;
   fitScore: number;
   isExploration: boolean;
   explanations: string[];
@@ -56,6 +57,7 @@ export function toDiscoveryCardDTO(
     dealerId: dealer.id,
     photos,
     videoUrl: scored.primaryVideoUrl,
+    videoCaptionUrl: scored.primaryVideoCaptionUrl,
     fitScore: scored.fitScore,
     isExploration: scored.isExploration,
     explanations: scored.explanations,

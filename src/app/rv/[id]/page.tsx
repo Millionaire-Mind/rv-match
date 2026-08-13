@@ -103,6 +103,7 @@ export default async function RvDetailPage({ params }: { params: Promise<{ id: s
         dealer={dealer ? { id: dealer.id, name: dealer.name, city: dealer.city, state: dealer.state, phone: dealer.phone } : null}
         photos={photos.map((p) => p.url)}
         videoUrl={primaryVideo?.url ?? null}
+        videoCaptionUrl={primaryVideo?.captionUrl ?? null}
         features={features}
         fitScore={fitScore}
         explanations={explanations}

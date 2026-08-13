@@ -43,6 +43,7 @@ interface RvDetailViewProps {
   dealer: { id: string; name: string; city: string | null; state: string | null; phone: string | null } | null;
   photos: string[];
   videoUrl: string | null;
+  videoCaptionUrl: string | null;
   features: string[];
   fitScore: number | null;
   explanations: string[];
@@ -55,6 +56,7 @@ export function RvDetailView({
   dealer,
   photos,
   videoUrl,
+  videoCaptionUrl,
   features,
   fitScore,
   explanations,
@@ -76,7 +78,13 @@ export function RvDetailView({
     <div className="mx-auto max-w-4xl pb-16">
       <div className="relative aspect-[9/16] w-full max-h-[70vh] overflow-hidden bg-black sm:rounded-b-2xl">
         {activeMedia === 0 && videoUrl ? (
-          <VideoPlayer src={videoUrl} poster={photos[0] ?? null} active className="h-full w-full" />
+          <VideoPlayer
+            src={videoUrl}
+            poster={photos[0] ?? null}
+            captionSrc={videoCaptionUrl}
+            active
+            className="h-full w-full"
+          />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img

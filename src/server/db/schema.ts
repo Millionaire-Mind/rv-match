@@ -51,7 +51,7 @@ export const inventoryStatusEnum = pgEnum("inventory_status", [
   "sold",
   "archived",
 ]);
-export const inventorySourceEnum = pgEnum("inventory_source", ["manual", "csv_import"]);
+export const inventorySourceEnum = pgEnum("inventory_source", ["manual", "csv_import", "feed_import"]);
 export const videoSourceEnum = pgEnum("video_source", ["dealer_upload", "generated"]);
 export const videoGenerationStatusEnum = pgEnum("video_generation_status", [
   "queued",

@@ -24,14 +24,19 @@ type InventoryDefaults = Partial<{
   salePriceCents: number;
   advertisedPriceCents: number | null;
   lengthInches: number | null;
+  widthInches: number | null;
+  heightInches: number | null;
   dryWeightLbs: number | null;
   gvwrLbs: number | null;
+  hitchWeightLbs: number | null;
   sleeps: number | null;
   slideCount: number | null;
+  bedConfiguration: string;
   bunkhouse: boolean;
   toyHauler: boolean;
   outdoorKitchen: boolean;
   exteriorColor: string;
+  interior: string;
   description: string;
   city: string;
   state: string;
@@ -117,11 +122,16 @@ export function InventoryForm({ action, defaults, submitLabel }: InventoryFormPr
           type="number"
           defaultValue={defaults?.lengthInches ? Math.round(defaults.lengthInches / 12) : undefined}
         />
+        <Field label="Width (in)" name="widthInches" type="number" defaultValue={defaults?.widthInches ?? undefined} />
+        <Field label="Height (in)" name="heightInches" type="number" defaultValue={defaults?.heightInches ?? undefined} />
         <Field label="Dry Weight (lbs)" name="dryWeightLbs" type="number" defaultValue={defaults?.dryWeightLbs ?? undefined} />
         <Field label="GVWR (lbs)" name="gvwrLbs" type="number" defaultValue={defaults?.gvwrLbs ?? undefined} />
+        <Field label="Hitch Weight (lbs)" name="hitchWeightLbs" type="number" defaultValue={defaults?.hitchWeightLbs ?? undefined} />
         <Field label="Sleeps" name="sleeps" type="number" defaultValue={defaults?.sleeps ?? undefined} />
         <Field label="Slide Count" name="slideCount" type="number" defaultValue={defaults?.slideCount ?? undefined} />
+        <Field label="Bed Configuration" name="bedConfiguration" defaultValue={defaults?.bedConfiguration} />
         <Field label="Exterior Color" name="exteriorColor" defaultValue={defaults?.exteriorColor} />
+        <Field label="Interior" name="interior" defaultValue={defaults?.interior} />
       </div>
 
       <div className="flex flex-wrap gap-6">

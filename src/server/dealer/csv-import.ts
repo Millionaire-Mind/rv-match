@@ -1,24 +1,13 @@
 "use server";
 
 import { parse } from "csv-parse/sync";
-import { eq } from "drizzle-orm";
 
-import { db } from "@/server/db/client";
-import { inventory, inventoryFeatures, inventoryPriceHistory } from "@/server/db/schema";
 import { requireDealerRole } from "@/server/auth/guards";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { csvRowSchema } from "@/server/validation/inventory";
+import { upsertInventoryRow } from "@/server/dealer/inventory-upsert";
 import { logAudit } from "@/server/audit/log";
 import { revalidatePath } from "next/cache";
-import { geocodeZip } from "@/server/geo/zip-centroids";
-
-/** Mirrors src/server/dealer/inventory-actions.ts's geocodeForZip - a CSV row with no/unrecognizable ZIP honestly gets no coordinates rather than a guessed default. */
-function geocodeForZip(zipCode: string | undefined): { lat: string | null; lng: string | null } {
-  if (!zipCode) return { lat: null, lng: null };
-  const geo = geocodeZip(zipCode);
-  if (!geo) return { lat: null, lng: null };
-  return { lat: geo.lat.toFixed(6), lng: geo.lng.toFixed(6) };
-}
 
 export interface CsvImportRowResult {
   row: number;
@@ -65,12 +54,6 @@ export async function importInventoryCsv(
   let updated = 0;
   let errors = 0;
 
-  const existingStockNumbers = await db
-    .select({ id: inventory.id, stockNumber: inventory.stockNumber, salePriceCents: inventory.salePriceCents })
-    .from(inventory)
-    .where(eq(inventory.dealershipId, dealershipId));
-  const existingByStock = new Map(existingStockNumbers.map((r) => [r.stockNumber, r]));
-
   for (let i = 0; i < records.length; i++) {
     const rowNumber = i + 2; // +1 for header row, +1 for 1-indexing
     const parsed = csvRowSchema.safeParse(records[i]);
@@ -84,98 +67,16 @@ export async function importInventoryCsv(
       errors += 1;
       continue;
     }
-    const d = parsed.data;
 
     try {
-      const existing = existingByStock.get(d.stock_number);
-      const salePriceCents = Math.round(d.sale_price * 100);
-      const geo = geocodeForZip(d.zip_code);
-
-      if (existing) {
-        if (existing.salePriceCents !== salePriceCents) {
-          await db.insert(inventoryPriceHistory).values({
-            inventoryId: existing.id,
-            oldPriceCents: existing.salePriceCents,
-            newPriceCents: salePriceCents,
-          });
-        }
-        await db
-          .update(inventory)
-          .set({
-            vin: d.vin,
-            year: d.year,
-            make: d.make,
-            model: d.model,
-            floorplan: d.floorplan,
-            rvType: d.rv_type,
-            condition: d.condition,
-            msrpCents: d.msrp ? Math.round(d.msrp * 100) : null,
-            salePriceCents,
-            advertisedPriceCents: d.advertised_price ? Math.round(d.advertised_price * 100) : null,
-            lengthInches: d.length_feet ? Math.round(d.length_feet * 12) : null,
-            dryWeightLbs: d.dry_weight_lbs,
-            gvwrLbs: d.gvwr_lbs,
-            sleeps: d.sleeps,
-            slideCount: d.slide_count ?? 0,
-            bunkhouse: Boolean(d.bunkhouse),
-            toyHauler: Boolean(d.toy_hauler),
-            outdoorKitchen: Boolean(d.outdoor_kitchen),
-            exteriorColor: d.exterior_color,
-            description: d.description,
-            city: d.city,
-            state: d.state,
-            zipCode: d.zip_code,
-            lat: geo.lat,
-            lng: geo.lng,
-            source: "csv_import",
-          })
-          .where(eq(inventory.id, existing.id));
-        await setFeaturesFromCsv(existing.id, d.features);
-        results.push({ row: rowNumber, stockNumber: d.stock_number, status: "updated" });
-        updated += 1;
-      } else {
-        const [rv] = await db
-          .insert(inventory)
-          .values({
-            dealershipId,
-            stockNumber: d.stock_number,
-            vin: d.vin,
-            year: d.year,
-            make: d.make,
-            model: d.model,
-            floorplan: d.floorplan,
-            rvType: d.rv_type,
-            condition: d.condition,
-            msrpCents: d.msrp ? Math.round(d.msrp * 100) : null,
-            salePriceCents,
-            advertisedPriceCents: d.advertised_price ? Math.round(d.advertised_price * 100) : null,
-            lengthInches: d.length_feet ? Math.round(d.length_feet * 12) : null,
-            dryWeightLbs: d.dry_weight_lbs,
-            gvwrLbs: d.gvwr_lbs,
-            sleeps: d.sleeps,
-            slideCount: d.slide_count ?? 0,
-            bunkhouse: Boolean(d.bunkhouse),
-            toyHauler: Boolean(d.toy_hauler),
-            outdoorKitchen: Boolean(d.outdoor_kitchen),
-            exteriorColor: d.exterior_color,
-            description: d.description,
-            city: d.city,
-            state: d.state,
-            zipCode: d.zip_code,
-            lat: geo.lat,
-            lng: geo.lng,
-            status: "draft",
-            source: "csv_import",
-          })
-          .returning({ id: inventory.id });
-        await setFeaturesFromCsv(rv.id, d.features);
-        results.push({ row: rowNumber, stockNumber: d.stock_number, status: "created" });
-        created += 1;
-      }
+      const result = await upsertInventoryRow(dealershipId, parsed.data, "csv_import");
+      results.push({ row: rowNumber, stockNumber: parsed.data.stock_number, status: result.action });
+      if (result.action === "created") created += 1;
+      else updated += 1;
     } catch (err) {
       results.push({
         row: rowNumber,
-        stockNumber: d.stock_number,
+        stockNumber: parsed.data.stock_number,
         status: "error",
         message: err instanceof Error ? err.message : "Unknown error",
       });
@@ -194,16 +95,4 @@ export async function importInventoryCsv(
   revalidatePath("/dealer/inventory");
 
   return { totalRows: records.length, created, updated, errors, rows: results };
-}
-
-async function setFeaturesFromCsv(inventoryId: string, featuresCsv: string | undefined) {
-  if (!featuresCsv) return;
-  await db.delete(inventoryFeatures).where(eq(inventoryFeatures.inventoryId, inventoryId));
-  const features = featuresCsv
-    .split(",")
-    .map((f) => f.trim())
-    .filter(Boolean);
-  if (features.length) {
-    await db.insert(inventoryFeatures).values(features.map((feature) => ({ inventoryId, feature })));
-  }
 }

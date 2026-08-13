@@ -1,7 +1,27 @@
 import path from "node:path";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { test, expect } from "@playwright/test";
+
+const REPO_ROOT = path.join(__dirname, "..");
+
+/**
+ * Video generation now always runs on a separate worker process, never
+ * inline in the dealer's request (see src/server/dealer/inventory-actions.ts
+ * requestVideoGeneration / src/server/video/worker.ts) - a real deployment
+ * runs this on a schedule or as a daemon. Simulate one worker tick so this
+ * test can observe a job actually complete, the same way a live deployment
+ * eventually would.
+ */
+function runVideoWorkerOnce() {
+  const tsxBin = path.join(REPO_ROOT, "node_modules", ".bin", "tsx");
+  execFileSync(tsxBin, ["scripts/run-video-worker.ts"], {
+    cwd: REPO_ROOT,
+    stdio: "inherit",
+    timeout: 60_000,
+  });
+}
 
 const DEMO_PASSWORD = "RvMatchDemo123!";
 const FIXTURES = path.join(__dirname, "fixtures");
@@ -35,6 +55,11 @@ test.describe("Dealer journey", () => {
     await expect(page.locator("img[alt='']").first()).toBeVisible({ timeout: 10000 });
 
     await page.getByRole("button", { name: "Generate Automatic Video" }).click();
+    await expect(page.getByText("Generation status:")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("queued", { exact: true })).toBeVisible();
+
+    runVideoWorkerOnce();
+    await page.reload();
     await expect(page.getByText("Auto-generated")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Primary")).toBeVisible();
 

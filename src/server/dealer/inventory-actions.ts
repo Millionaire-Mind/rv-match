@@ -21,7 +21,6 @@ import {
 } from "@/server/auth/guards";
 import { inventoryFormSchema } from "@/server/validation/inventory";
 import { uploadBuffer } from "@/server/storage";
-import { processVideoGenerationJob } from "@/server/video/worker";
 import { logAudit } from "@/server/audit/log";
 
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // 15MB
@@ -312,23 +311,25 @@ export async function setPrimaryVideo(dealershipId: string, inventoryId: string,
   revalidatePath(`/dealer/inventory/${inventoryId}`);
 }
 
+/**
+ * Enqueues a video generation job and returns immediately. FFmpeg encoding
+ * is real CPU/wall-clock work (multiple photos, Ken-Burns motion, crossfade
+ * concatenation) that can comfortably exceed a serverless request's time
+ * budget, so this deliberately does NOT run the job inline - a dedicated
+ * worker process (src/server/video/worker.ts, run via `npm run
+ * video:worker` / scripts/run-video-worker.ts) claims and processes queued
+ * jobs on its own schedule, independent of any request/response cycle. The
+ * dealer UI (VideoManager) already polls for and displays queued /
+ * processing / completed / failed status.
+ */
 export async function requestVideoGeneration(dealershipId: string, inventoryId: string) {
   const { userId } = await requireDealerRole(dealershipId);
   await requireInventoryInDealership(dealershipId, inventoryId);
-  const [job] = await db
-    .insert(videoGenerationJobs)
-    .values({ inventoryId, requestedBy: userId })
-    .returning({ id: videoGenerationJobs.id });
-
-  try {
-    await processVideoGenerationJob(job.id);
-  } catch {
-    // Failure is recorded on the job row itself; surfaced in the UI via
-    // video-generation status, not thrown to the caller.
-  }
+  await db.insert(videoGenerationJobs).values({ inventoryId, requestedBy: userId });
   revalidatePath(`/dealer/inventory/${inventoryId}`);
 }
 
+/** Resets a failed job back to queued for the worker to pick up again - see requestVideoGeneration for why this doesn't process inline. */
 export async function retryVideoGeneration(dealershipId: string, jobId: string, inventoryId: string) {
   await requireDealerRole(dealershipId);
   const job = await requireVideoJobInDealership(dealershipId, jobId);
@@ -339,11 +340,6 @@ export async function retryVideoGeneration(dealershipId: string, jobId: string, 
     .update(videoGenerationJobs)
     .set({ status: "queued", errorMessage: null })
     .where(eq(videoGenerationJobs.id, jobId));
-  try {
-    await processVideoGenerationJob(jobId);
-  } catch {
-    // status recorded on the job row
-  }
   revalidatePath(`/dealer/inventory/${inventoryId}`);
 }
 

@@ -24,9 +24,6 @@ vi.mock("next/headers", () => ({
   }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
-vi.mock("@/server/video/worker", () => ({
-  processVideoGenerationJob: vi.fn(async () => {}),
-}));
 
 const { localSignUp } = await import("@/server/auth/local-provider");
 const { signSessionToken } = await import("@/server/auth/session-cookie");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Play, RefreshCw, Upload } from "lucide-react";
 
@@ -45,6 +45,17 @@ export function VideoManager({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Generation now always runs on a separate worker process (see
+  // requestVideoGeneration), not inline in the request, so this page needs
+  // to poll for the job to move past queued/processing on its own instead
+  // of relying on a one-time router.refresh() after the request returns.
+  const isWaitingOnWorker = latestJob?.status === "queued" || latestJob?.status === "processing";
+  useEffect(() => {
+    if (!isWaitingOnWorker) return;
+    const interval = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(interval);
+  }, [isWaitingOnWorker, router]);
 
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

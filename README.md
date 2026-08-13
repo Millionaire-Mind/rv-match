@@ -119,16 +119,30 @@ See `TESTING.md` for what each suite covers and how to run a subset.
 
 ## Video generation worker
 
-The dealer "Generate Automatic Video" button processes synchronously (a few
-seconds for a typical 3-5 photo RV). For a production deployment, also run
-the worker on a schedule to catch anything queued but not yet processed
-(e.g. from a CSV import that doesn't trigger generation automatically):
+The dealer "Generate Automatic Video" button only **enqueues** a job
+(`video_generation_jobs`, status `queued`) and returns immediately - it
+never runs FFmpeg inline in the request. FFmpeg encoding a multi-photo
+Ken-Burns video is real CPU/wall-clock work that can comfortably exceed a
+serverless request's time budget, so a separate, dedicated worker process
+claims and processes jobs on its own schedule:
 
 ```bash
-npm run video:worker   # processes all queued jobs once, then exits
+npm run video:worker          # claims and processes every queued job once, then exits - for cron
+npm run video:worker:daemon   # runs as a persistent process, polling every 30s until stopped - for a long-lived host/container
 ```
 
-Run this from cron (every 1-2 minutes) or any scheduled-task runner.
+You must run one of these (via cron every 1-2 minutes, or as a persistent
+daemon) for any queued video to actually generate - **nothing else
+processes the queue**, including in local development. The dealer
+dashboard polls and shows queued / processing / completed / failed status
+so this is never silently stuck; a job stuck in `processing` for more than
+15 minutes (e.g. a worker that crashed mid-job) is automatically reclaimed
+back to `queued` on the next worker tick, up to 3 attempts, before being
+marked `failed`.
+
+Job claiming uses `SELECT ... FOR UPDATE SKIP LOCKED`, so it's safe to run
+multiple worker instances (or overlapping cron runs) concurrently - each
+claims a different job instead of racing to process the same one.
 
 ## Demo accounts
 

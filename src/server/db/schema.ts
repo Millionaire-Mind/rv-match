@@ -309,6 +309,47 @@ export const inventoryPriceHistory = pgTable("inventory_price_history", {
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * A dealer-configured remote inventory feed (CSV/JSON/XML URL + a mapping
+ * from their feed's field names to our canonical column names). Runs are
+ * recorded in inventory_feed_runs; scripts/run-feed-import.ts is the
+ * dedicated worker that refreshes active sources on a schedule, mirroring
+ * how video generation runs on its own worker rather than inline in a
+ * request (see scripts/run-video-worker.ts).
+ */
+export const inventoryFeedSources = pgTable("inventory_feed_sources", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  dealershipId: uuid("dealership_id")
+    .notNull()
+    .references(() => dealerships.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  format: text("format").notNull(),
+  url: text("url").notNull(),
+  fieldMapping: jsonb("field_mapping").notNull().default({}),
+  recordPath: text("record_path"),
+  refreshIntervalMinutes: integer("refresh_interval_minutes"),
+  active: boolean("active").notNull().default(true),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  lastRunStatus: text("last_run_status"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const inventoryFeedRuns = pgTable("inventory_feed_runs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  feedSourceId: uuid("feed_source_id")
+    .notNull()
+    .references(() => inventoryFeedSources.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  rowsProcessed: integer("rows_processed").notNull().default(0),
+  rowsCreated: integer("rows_created").notNull().default(0),
+  rowsUpdated: integer("rows_updated").notNull().default(0),
+  rowsFailed: integer("rows_failed").notNull().default(0),
+  errors: jsonb("errors").notNull().default([]),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
 export const videoGenerationJobs = pgTable("video_generation_jobs", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   inventoryId: uuid("inventory_id")

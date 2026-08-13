@@ -2,6 +2,19 @@ import { z } from "zod";
 
 import { rvConditionSchema, rvTypeSchema } from "./enums";
 
+/**
+ * A raw CSV/feed cell's string value, coerced to a real boolean. Not
+ * z.coerce.boolean(): that calls JS's Boolean(), which is true for *any*
+ * non-empty string - including the literal text "false" - so a dealer's
+ * feed explicitly writing "false" would silently import as true. Only
+ * recognizable truthy tokens count as true; everything else (including a
+ * blank cell) is false.
+ */
+const csvBooleanSchema = z
+  .string()
+  .transform((v) => ["true", "1", "yes", "y"].includes(v.trim().toLowerCase()))
+  .optional();
+
 export const inventoryFormSchema = z.object({
   stockNumber: z.string().trim().min(1, "Stock number is required.").max(64),
   vin: z.string().trim().max(32).optional(),
@@ -58,9 +71,9 @@ export const csvRowSchema = z.object({
   sleeps: z.coerce.number().int().nonnegative().optional(),
   slide_count: z.coerce.number().int().nonnegative().optional(),
   bed_configuration: z.string().trim().optional(),
-  bunkhouse: z.coerce.boolean().optional(),
-  toy_hauler: z.coerce.boolean().optional(),
-  outdoor_kitchen: z.coerce.boolean().optional(),
+  bunkhouse: csvBooleanSchema,
+  toy_hauler: csvBooleanSchema,
+  outdoor_kitchen: csvBooleanSchema,
   exterior_color: z.string().trim().optional(),
   interior: z.string().trim().optional(),
   description: z.string().trim().optional(),

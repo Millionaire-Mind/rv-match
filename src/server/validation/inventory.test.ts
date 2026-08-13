@@ -51,4 +51,37 @@ describe("csvRowSchema", () => {
     const result = csvRowSchema.safeParse(validRow);
     expect(result.success).toBe(true);
   });
+
+  it("parses the literal string \"false\" as false, not as JS-truthy true", () => {
+    // z.coerce.boolean() would get this wrong: Boolean("false") is true in
+    // plain JS, since any non-empty string is truthy. A dealer's CSV/feed
+    // writing "false" explicitly must import as false.
+    const result = csvRowSchema.safeParse({
+      ...validRow,
+      bunkhouse: "false",
+      toy_hauler: "false",
+      outdoor_kitchen: "false",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.bunkhouse).toBe(false);
+      expect(result.data.toy_hauler).toBe(false);
+      expect(result.data.outdoor_kitchen).toBe(false);
+    }
+  });
+
+  it("treats a blank cell as false and an unrecognized value as false, not true", () => {
+    const blank = csvRowSchema.safeParse({ ...validRow, bunkhouse: "" });
+    expect(blank.success && blank.data.bunkhouse).toBe(false);
+
+    const garbage = csvRowSchema.safeParse({ ...validRow, bunkhouse: "maybe" });
+    expect(garbage.success && garbage.data.bunkhouse).toBe(false);
+  });
+
+  it("accepts common truthy tokens case-insensitively", () => {
+    for (const token of ["true", "TRUE", "1", "yes", "Y"]) {
+      const result = csvRowSchema.safeParse({ ...validRow, bunkhouse: token });
+      expect(result.success && result.data.bunkhouse).toBe(true);
+    }
+  });
 });

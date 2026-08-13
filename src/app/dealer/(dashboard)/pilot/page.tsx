@@ -54,7 +54,7 @@ export default async function DealerPilotPage() {
           <div>
             <div className="flex justify-between text-sm">
               <span>Verified sales</span>
-              <span>
+              <span data-testid="pilot-verified-sales">
                 {pilot.verifiedSalesCount} / {pilot.salesThreshold}
               </span>
             </div>

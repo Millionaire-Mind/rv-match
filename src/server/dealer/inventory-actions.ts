@@ -13,7 +13,12 @@ import {
   inventoryVideos,
   videoGenerationJobs,
 } from "@/server/db/schema";
-import { requireDealerRole } from "@/server/auth/guards";
+import {
+  requireDealerRole,
+  requireInventoryInDealership,
+  requireVideoBelongsToInventory,
+  requireVideoJobInDealership,
+} from "@/server/auth/guards";
 import { inventoryFormSchema } from "@/server/validation/inventory";
 import { uploadBuffer } from "@/server/storage";
 import { processVideoGenerationJob } from "@/server/video/worker";
@@ -204,6 +209,7 @@ export async function setInventoryStatus(
   status: "draft" | "published" | "sold" | "archived",
 ): Promise<void> {
   await requireDealerRole(dealershipId);
+  await requireInventoryInDealership(dealershipId, inventoryId);
   await db
     .update(inventory)
     .set({ status, dateSold: status === "sold" ? new Date() : undefined })
@@ -224,6 +230,7 @@ export async function uploadInventoryPhotos(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
   await requireDealerRole(dealershipId);
+  await requireInventoryInDealership(dealershipId, inventoryId);
   const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { ok: true };
 
@@ -271,6 +278,7 @@ export async function uploadInventoryVideo(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
   await requireDealerRole(dealershipId);
+  await requireInventoryInDealership(dealershipId, inventoryId);
   const file = formData.get("video");
   if (!(file instanceof File) || file.size === 0) return { ok: true };
 
@@ -298,12 +306,15 @@ export async function uploadInventoryVideo(
 
 export async function setPrimaryVideo(dealershipId: string, inventoryId: string, videoId: string) {
   await requireDealerRole(dealershipId);
+  await requireInventoryInDealership(dealershipId, inventoryId);
+  await requireVideoBelongsToInventory(inventoryId, videoId);
   await db.update(inventory).set({ primaryVideoId: videoId }).where(eq(inventory.id, inventoryId));
   revalidatePath(`/dealer/inventory/${inventoryId}`);
 }
 
 export async function requestVideoGeneration(dealershipId: string, inventoryId: string) {
   const { userId } = await requireDealerRole(dealershipId);
+  await requireInventoryInDealership(dealershipId, inventoryId);
   const [job] = await db
     .insert(videoGenerationJobs)
     .values({ inventoryId, requestedBy: userId })
@@ -320,6 +331,10 @@ export async function requestVideoGeneration(dealershipId: string, inventoryId: 
 
 export async function retryVideoGeneration(dealershipId: string, jobId: string, inventoryId: string) {
   await requireDealerRole(dealershipId);
+  const job = await requireVideoJobInDealership(dealershipId, jobId);
+  if (job.inventoryId !== inventoryId) {
+    throw new Error("Video job does not match the requested RV.");
+  }
   await db
     .update(videoGenerationJobs)
     .set({ status: "queued", errorMessage: null })

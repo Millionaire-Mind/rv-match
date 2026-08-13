@@ -58,10 +58,11 @@ export function LeadDetailPanel({
   }
 
   function handleAddNote() {
-    if (!note.trim()) return;
+    const trimmed = note.trim();
+    if (!trimmed) return;
+    setNote("");
     startTransition(async () => {
-      await addLeadNote(dealershipId, leadId, note);
-      setNote("");
+      await addLeadNote(dealershipId, leadId, trimmed);
       router.refresh();
     });
   }

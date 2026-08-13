@@ -2,6 +2,8 @@ import { and, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
 import { attributedSales, behavioralEvents, inventory, leads, savedInventory, swipeDecisions } from "@/server/db/schema";
+import { requireDealerRole } from "@/server/auth/guards";
+import { ANALYTICS_ROLES } from "@/server/dealer/permissions";
 
 export interface PerRvAnalyticsRow {
   inventoryId: string;
@@ -28,6 +30,7 @@ export interface PerRvAnalyticsRow {
  * only ever answered the second one.
  */
 export async function getPerRvAnalytics(dealershipId: string, sinceDays: number): Promise<PerRvAnalyticsRow[]> {
+  await requireDealerRole(dealershipId, ANALYTICS_ROLES);
   const since = sinceDays > 0 ? new Date(Date.now() - sinceDays * 86400000) : null;
 
   const rvs = await db

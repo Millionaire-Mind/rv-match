@@ -128,3 +128,28 @@ describe("campaign ownership guard (IDOR)", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+describe("campaign role gate (marketing, not just management)", () => {
+  it("allows a marketing-role user to create a campaign - the role the permission matrix defines this feature for", async () => {
+    const suffix = Date.now();
+    const marketer = await localSignUp({ email: `campaign-marketing-${suffix}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId: dealershipAId, userId: marketer.userId, role: "marketing" });
+    asUser(marketer.userId);
+
+    const fd = new FormData();
+    fd.set("name", "Marketing-created link");
+    const result = await createDealerCampaign(dealershipAId, { ok: false, error: "" }, fd);
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a sales_manager - campaigns/distribution is scoped to owner/marketing, not sales management", async () => {
+    const suffix = Date.now();
+    const salesManager = await localSignUp({ email: `campaign-salesmgr-${suffix}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId: dealershipAId, userId: salesManager.userId, role: "sales_manager" });
+    asUser(salesManager.userId);
+
+    const fd = new FormData();
+    fd.set("name", "Should be blocked");
+    await expect(createDealerCampaign(dealershipAId, { ok: false, error: "" }, fd)).rejects.toThrow(ForbiddenError);
+  });
+});

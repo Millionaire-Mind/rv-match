@@ -1,9 +1,21 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { anonymousSessions, consumerProfiles, dealerships, inventory, swipeDecisions } from "@/server/db/schema";
-import { getDemandIntelligence } from "./demand-intelligence";
+import { anonymousSessions, consumerProfiles, dealershipUsers, dealerships, inventory, swipeDecisions } from "@/server/db/schema";
+
+let currentToken: string | undefined;
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) => (name === "rvm_auth" && currentToken ? { value: currentToken } : undefined),
+    set: () => {},
+    delete: () => {},
+  }),
+}));
+
+const { localSignUp } = await import("@/server/auth/local-provider");
+const { signSessionToken } = await import("@/server/auth/session-cookie");
+const { getDemandIntelligence } = await import("./demand-intelligence");
 
 /**
  * Phase 16: demand intelligence must reflect genuine *platform-wide*
@@ -64,6 +76,10 @@ beforeAll(async () => {
     })
     .returning({ id: dealerships.id });
   targetDealershipId = target.id;
+
+  const owner = await localSignUp({ email: `demand-owner-${suffix}@example.com`, password: "TestPassword123!" });
+  await db.insert(dealershipUsers).values({ dealershipId: targetDealershipId, userId: owner.userId, role: "owner" });
+  currentToken = signSessionToken(owner.userId);
 });
 
 afterAll(async () => {
@@ -179,5 +195,14 @@ describe("getDemandIntelligence", () => {
         ["attribute", "dealerInventoryCount", "gapScore", "label", "marketDemandCount", "value"].sort(),
       );
     }
+  });
+
+  it("rejects a salesperson - dashboard/analytics viewing is restricted to owner/sales_manager/marketing", async () => {
+    const { ForbiddenError } = await import("@/server/auth/guards");
+    const sp = await localSignUp({ email: `demand-sp-${Date.now()}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId: targetDealershipId, userId: sp.userId, role: "salesperson" });
+    currentToken = signSessionToken(sp.userId);
+
+    await expect(getDemandIntelligence(targetDealershipId, 30, 20)).rejects.toThrow(ForbiddenError);
   });
 });

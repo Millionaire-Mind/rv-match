@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
@@ -6,6 +6,7 @@ import {
   anonymousSessions,
   attributedSales,
   consumerProfiles,
+  dealershipUsers,
   dealerships,
   inventory,
   inventoryVideos,
@@ -14,7 +15,6 @@ import {
   swipeDecisions,
 } from "@/server/db/schema";
 import { trackEvent } from "@/server/analytics/track";
-import { getPerRvAnalytics } from "./rv-analytics";
 
 /**
  * Phase 15: per-RV analytics must break down impressions/completion/swipe
@@ -22,6 +22,19 @@ import { getPerRvAnalytics } from "./rv-analytics";
  * dealership-wide aggregate (see getDealerKpis) - this proves each metric
  * is correctly scoped to the specific inventory row it belongs to.
  */
+
+let currentToken: string | undefined;
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) => (name === "rvm_auth" && currentToken ? { value: currentToken } : undefined),
+    set: () => {},
+    delete: () => {},
+  }),
+}));
+
+const { localSignUp } = await import("@/server/auth/local-provider");
+const { signSessionToken } = await import("@/server/auth/session-cookie");
+const { getPerRvAnalytics } = await import("./rv-analytics");
 
 let dealershipId: string;
 let anonymousSessionId: string;
@@ -122,6 +135,10 @@ beforeAll(async () => {
 
   // Quiet RV: just one pass, nothing else.
   await db.insert(swipeDecisions).values({ consumerProfileId, inventoryId: quietRvId, decision: "pass" });
+
+  const owner = await localSignUp({ email: `rv-analytics-owner-${suffix}@example.com`, password: "TestPassword123!" });
+  await db.insert(dealershipUsers).values({ dealershipId, userId: owner.userId, role: "owner" });
+  currentToken = signSessionToken(owner.userId);
 });
 
 afterAll(async () => {
@@ -155,5 +172,14 @@ describe("getPerRvAnalytics", () => {
   it("returns every RV in the dealership even with zero activity", async () => {
     const rows = await getPerRvAnalytics(dealershipId, 0);
     expect(rows.map((r) => r.inventoryId).sort()).toEqual([popularRvId, quietRvId].sort());
+  });
+
+  it("rejects a salesperson - dashboard/analytics viewing is restricted to owner/sales_manager/marketing", async () => {
+    const { ForbiddenError } = await import("@/server/auth/guards");
+    const sp = await localSignUp({ email: `rv-analytics-sp-${Date.now()}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId, userId: sp.userId, role: "salesperson" });
+    currentToken = signSessionToken(sp.userId);
+
+    await expect(getPerRvAnalytics(dealershipId, 0)).rejects.toThrow(ForbiddenError);
   });
 });

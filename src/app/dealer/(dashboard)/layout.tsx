@@ -8,6 +8,7 @@ import { brand } from "@/config/brand";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { DemoModeBadge } from "@/components/demo-mode-badge";
 import { dealerRoleLabels } from "@/server/validation/enums";
+import { ANALYTICS_ROLES, MARKETING_ROLES } from "@/server/dealer/permissions";
 
 // Pending/suspended/rejected dealerships never reach this layout -
 // requireDealerContext redirects them to /dealer/pending before returning,
@@ -20,8 +21,8 @@ export default async function DealerDashboardLayout({ children }: { children: Re
   const nav = [
     { href: "/dealer", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dealer/inventory", label: "Inventory", icon: Package },
-    { href: "/dealer/analytics", label: "Analytics", icon: BarChart3 },
-    { href: "/dealer/distribution", label: "Distribution", icon: QrCode },
+    ...(ANALYTICS_ROLES.includes(role) ? [{ href: "/dealer/analytics", label: "Analytics", icon: BarChart3 }] : []),
+    ...(MARKETING_ROLES.includes(role) ? [{ href: "/dealer/distribution", label: "Distribution", icon: QrCode }] : []),
     { href: "/dealer/leads", label: "Leads", icon: Users },
     { href: "/dealer/pilot", label: "Pilot", icon: ListChecks },
     ...(role === "owner" ? [{ href: "/dealer/team", label: "Team", icon: UserCog }] : []),

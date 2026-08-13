@@ -4,6 +4,8 @@ import { db } from "@/server/db/client";
 import { inventory, swipeDecisions } from "@/server/db/schema";
 import { attributesForInventory, type InventoryRow } from "@/server/recommendation/attributes";
 import { ATTRIBUTE_LABELS } from "@/server/recommendation/profile";
+import { requireDealerRole } from "@/server/auth/guards";
+import { ANALYTICS_ROLES } from "@/server/dealer/permissions";
 
 /**
  * Attributes worth surfacing as a demand/gap signal - not every attribute
@@ -43,6 +45,7 @@ export interface DemandSignal {
  * individual consumer - only aggregate counts across all shoppers.
  */
 export async function getDemandIntelligence(dealershipId: string, sinceDays = 30, limit = 10): Promise<DemandSignal[]> {
+  await requireDealerRole(dealershipId, ANALYTICS_ROLES);
   const since = new Date(Date.now() - sinceDays * 86400000);
 
   const [interestedSwipes, dealerInventory] = await Promise.all([

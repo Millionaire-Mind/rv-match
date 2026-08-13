@@ -32,6 +32,7 @@ export const intentWeightsSchema = z.object({
   repeat_session: z.number(),
   video_complete: z.number(),
   call_dealer: z.number(),
+  love_swipe: z.number(),
   proximityBonusMax: z.number(),
   proximityBonusMiles: z.number(),
 });
@@ -64,6 +65,7 @@ const DEFAULT_INTENT_WEIGHTS: IntentWeights = {
   repeat_session: 8,
   video_complete: 3,
   call_dealer: 25,
+  love_swipe: 1.5,
   proximityBonusMax: 10,
   proximityBonusMiles: 30,
 };

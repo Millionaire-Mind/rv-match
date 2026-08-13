@@ -1,7 +1,7 @@
 import { and, count, countDistinct, eq, sql } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { behavioralEvents, consumerProfiles, dealerships, savedInventory } from "@/server/db/schema";
+import { behavioralEvents, consumerProfiles, dealerships, savedInventory, swipeDecisions } from "@/server/db/schema";
 import { haversineMiles } from "@/server/geo/zip-centroids";
 import type { IntentWeights } from "./config";
 import type { leadCtaTypeSchema } from "@/server/validation/enums";
@@ -106,6 +106,21 @@ export async function computeIntentScore(params: {
   const videoCompleteCount = videoCompleteRow?.n ?? 0;
   if (videoCompleteCount > 0) {
     score += Math.min(videoCompleteCount, 10) * weights.video_complete;
+  }
+
+  const [enthusiasmRow] = await db
+    .select({ n: count() })
+    .from(swipeDecisions)
+    .where(
+      and(
+        eq(swipeDecisions.consumerProfileId, consumerProfileId),
+        sql`${swipeDecisions.decision} in ('love', 'more_like_this')`,
+      ),
+    );
+  const enthusiasmCount = enthusiasmRow?.n ?? 0;
+  if (enthusiasmCount > 0) {
+    score += Math.min(enthusiasmCount, 10) * weights.love_swipe;
+    reasons.push(`Loved or asked for more like ${enthusiasmCount} RV${enthusiasmCount === 1 ? "" : "s"} while browsing`);
   }
 
   const [callDealerRow] = await db

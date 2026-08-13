@@ -20,6 +20,8 @@ interface BehaviorSnapshot {
   rvsViewed?: number;
   likes?: number;
   loves?: number;
+  passes?: number;
+  moreLikeThis?: number;
   saves?: number;
   topPreferences?: { label: string; strength: number }[];
 }
@@ -131,6 +133,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <p>RVs viewed: {snapshot.rvsViewed ?? 0}</p>
             <p>Liked: {snapshot.likes ?? 0}</p>
             <p>Loved: {snapshot.loves ?? 0}</p>
+            <p>Asked for &quot;more like this&quot;: {snapshot.moreLikeThis ?? 0}</p>
+            <p>Passed on: {snapshot.passes ?? 0}</p>
             <p>Saved: {snapshot.saves ?? 0}</p>
             {snapshot.topPreferences && snapshot.topPreferences.length > 0 && (
               <div>

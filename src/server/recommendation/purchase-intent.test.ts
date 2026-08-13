@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { anonymousSessions, behavioralEvents, consumerProfiles, dealerships } from "@/server/db/schema";
+import { anonymousSessions, behavioralEvents, consumerProfiles, dealerships, inventory, swipeDecisions } from "@/server/db/schema";
 import { computeIntentScore } from "./purchase-intent";
 import type { IntentWeights } from "./config";
 
@@ -24,6 +24,7 @@ const weights: IntentWeights = {
   repeat_session: 8,
   video_complete: 3,
   call_dealer: 25,
+  love_swipe: 1.5,
   proximityBonusMax: 10,
   proximityBonusMiles: 30,
 };
@@ -155,6 +156,62 @@ describe("computeIntentScore", () => {
 
     expect(after.score).toBeGreaterThan(before.score);
     expect(after.reasons.some((r) => r.includes("Call Dealer"))).toBe(true);
+  });
+
+  it("increases with love/more_like_this swipes elsewhere in the app, not just this dealer's inventory", async () => {
+    const suffix = Date.now();
+    const [rvA] = await db
+      .insert(inventory)
+      .values({
+        dealershipId,
+        stockNumber: `PI-LOVE-A-${suffix}`,
+        year: 2024,
+        make: "Forest River",
+        model: "Rockwood",
+        rvType: "travel_trailer",
+        condition: "new",
+        salePriceCents: 3000000,
+        status: "published",
+        source: "manual",
+      })
+      .returning({ id: inventory.id });
+    const [rvB] = await db
+      .insert(inventory)
+      .values({
+        dealershipId,
+        stockNumber: `PI-LOVE-B-${suffix}`,
+        year: 2024,
+        make: "Forest River",
+        model: "Rockwood",
+        rvType: "travel_trailer",
+        condition: "new",
+        salePriceCents: 3000000,
+        status: "published",
+        source: "manual",
+      })
+      .returning({ id: inventory.id });
+
+    const before = await computeIntentScore({
+      consumerProfileId,
+      dealershipId,
+      ctaType: "ask_question",
+      weights,
+    });
+
+    await db.insert(swipeDecisions).values([
+      { consumerProfileId, inventoryId: rvA.id, decision: "love" },
+      { consumerProfileId, inventoryId: rvB.id, decision: "more_like_this" },
+    ]);
+
+    const after = await computeIntentScore({
+      consumerProfileId,
+      dealershipId,
+      ctaType: "ask_question",
+      weights,
+    });
+
+    expect(after.score).toBeGreaterThan(before.score);
+    expect(after.reasons.some((r) => r.includes("Loved or asked for more like"))).toBe(true);
   });
 
   it("caps the score at 100", async () => {

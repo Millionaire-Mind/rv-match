@@ -69,6 +69,24 @@ export async function addLeadNote(dealershipId: string, leadId: string, note: st
   revalidatePath(`/dealer/leads/${leadId}`);
 }
 
+function isUniqueViolation(err: unknown, constraintName: string): boolean {
+  // drizzle-orm wraps the driver's PostgresError in a DrizzleQueryError with
+  // the original error on `.cause` - check both, since which one carries
+  // the Postgres error fields (`code` / `constraint_name`) isn't guaranteed
+  // to stay the same across drizzle-orm/postgres.js versions.
+  for (const candidate of [err, (err as { cause?: unknown } | null)?.cause]) {
+    if (
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as { code?: string }).code === "23505" &&
+      (candidate as { constraint_name?: string }).constraint_name === constraintName
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const markSoldSchema = z.object({
   soldInventoryId: z.uuid(),
   salePrice: z.coerce.number().nonnegative().optional(),
@@ -103,31 +121,47 @@ export async function markLeadSold(
     return { ok: false, error: "Select a valid RV from your inventory." };
   }
 
-  await db.insert(attributedSales).values({
-    leadId,
-    dealershipId,
-    soldInventoryId: d.soldInventoryId,
-    isOriginalLeadRv: d.soldInventoryId === lead.inventoryId,
-    salePriceCents: d.salePrice ? Math.round(d.salePrice * 100) : null,
-    saleDate: d.saleDate,
-    salespersonId: userId,
-    notes: d.notes || null,
-    verificationStatus: "dealer_reported",
-  });
+  try {
+    await db.transaction(async (tx) => {
+      // The unique constraint on attributed_sales.lead_id is the actual
+      // guard against a double form submit racing this same check; this
+      // insert is the only write in the transaction that can violate it.
+      await tx.insert(attributedSales).values({
+        leadId,
+        dealershipId,
+        soldInventoryId: d.soldInventoryId,
+        isOriginalLeadRv: d.soldInventoryId === lead.inventoryId,
+        salePriceCents: d.salePrice ? Math.round(d.salePrice * 100) : null,
+        saleDate: d.saleDate,
+        salespersonId: userId,
+        notes: d.notes || null,
+        verificationStatus: "dealer_reported",
+      });
 
-  await db.update(inventory).set({ status: "sold", dateSold: new Date() }).where(eq(inventory.id, d.soldInventoryId));
+      await tx
+        .update(inventory)
+        .set({ status: "sold", dateSold: new Date() })
+        .where(eq(inventory.id, d.soldInventoryId));
 
-  await db.update(leads).set({ status: "sold" }).where(eq(leads.id, leadId));
-  await db.insert(leadActivity).values({
-    leadId,
-    actorId: userId,
-    activityType: "status_change",
-    fromStatus: lead.status,
-    toStatus: "sold",
-    note: "Marked sold; sale reported for verification.",
-  });
+      await tx.update(leads).set({ status: "sold" }).where(eq(leads.id, leadId));
+      await tx.insert(leadActivity).values({
+        leadId,
+        actorId: userId,
+        activityType: "status_change",
+        fromStatus: lead.status,
+        toStatus: "sold",
+        note: "Marked sold; sale reported for verification.",
+      });
 
-  await logAudit({ action: "lead.mark_sold", entityType: "lead", entityId: leadId, dealershipId });
+      await logAudit({ action: "lead.mark_sold", entityType: "lead", entityId: leadId, dealershipId }, tx);
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, "attributed_sales_lead_id_unique")) {
+      return { ok: false, error: "This lead has already been marked sold." };
+    }
+    throw err;
+  }
+
   revalidatePath("/dealer/leads");
   revalidatePath(`/dealer/leads/${leadId}`);
   revalidatePath("/dealer/pilot");

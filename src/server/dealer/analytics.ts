@@ -183,9 +183,20 @@ export async function getPilotSummary(dealershipId: string): Promise<PilotSummar
     .limit(1);
   if (!pilot) return null;
 
+  // dealer_pilots.verified_sales_count is kept in sync transactionally
+  // alongside attributed_sales (see src/server/admin/sale-actions.ts), but
+  // attributed_sales rows filtered by verification_status = 'verified' are
+  // the actual source of truth, so pilot-threshold decisions are derived
+  // live from them rather than trusted from the cached counter.
+  const [verifiedRow] = await db
+    .select({ n: count() })
+    .from(attributedSales)
+    .where(and(eq(attributedSales.dealershipId, dealershipId), eq(attributedSales.verificationStatus, "verified")));
+  const verifiedSalesCount = verifiedRow?.n ?? 0;
+
   return {
     status: computePilotStatus({
-      verifiedSalesCount: pilot.verifiedSalesCount,
+      verifiedSalesCount,
       salesThreshold: pilot.salesThreshold,
       startedAt: pilot.startedAt,
       trialDays: pilot.trialDays,
@@ -194,7 +205,7 @@ export async function getPilotSummary(dealershipId: string): Promise<PilotSummar
     daysRemaining: daysRemainingFor(pilot.startedAt, pilot.trialDays),
     trialDays: pilot.trialDays,
     salesThreshold: pilot.salesThreshold,
-    verifiedSalesCount: pilot.verifiedSalesCount,
+    verifiedSalesCount,
     startedAt: pilot.startedAt,
   };
 }

@@ -404,6 +404,7 @@ export const attributedSales = pgTable("attributed_sales", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   leadId: uuid("lead_id")
     .notNull()
+    .unique()
     .references(() => leads.id, { onDelete: "cascade" }),
   dealershipId: uuid("dealership_id")
     .notNull()

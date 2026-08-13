@@ -7,7 +7,7 @@ import { PlayCircle, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { toggleSaveInventory } from "@/server/discovery/actions";
+import { showMeSimilarRvs, toggleSaveInventory } from "@/server/discovery/actions";
 import type { SavedCardData } from "@/server/inventory/saved";
 
 export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
@@ -75,9 +75,19 @@ export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
             <p className="text-sm text-muted-foreground">{item.dealerName}</p>
             <div className="mt-1 flex items-center justify-between">
               <span className="font-semibold">{formatCurrency(item.priceCents)}</span>
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/rv/${item.inventoryId}`}>View</Link>
-              </Button>
+              {item.status === "sold" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => startTransition(() => showMeSimilarRvs(item.inventoryId))}
+                >
+                  Find Similar
+                </Button>
+              ) : (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/rv/${item.inventoryId}`}>View</Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>

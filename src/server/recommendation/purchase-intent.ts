@@ -39,6 +39,12 @@ export async function computeIntentScore(params: {
   } else if (ctaType === "request_best_price") {
     score += weights.availability_request * 0.6;
     reasons.push("Asked for the dealer's best price");
+  } else if (ctaType === "estimate_trade") {
+    score += weights.trade_interest;
+    reasons.push("Asked for a trade-in estimate");
+  } else if (ctaType === "financing_info") {
+    score += weights.financing_interest;
+    reasons.push("Requested financing information");
   }
 
   if (!consumerProfileId) {
@@ -100,6 +106,21 @@ export async function computeIntentScore(params: {
   const videoCompleteCount = videoCompleteRow?.n ?? 0;
   if (videoCompleteCount > 0) {
     score += Math.min(videoCompleteCount, 10) * weights.video_complete;
+  }
+
+  const [callDealerRow] = await db
+    .select({ n: count() })
+    .from(behavioralEvents)
+    .where(
+      and(
+        eq(behavioralEvents.consumerProfileId, consumerProfileId),
+        eq(behavioralEvents.eventType, "call_dealer_clicked"),
+      ),
+    );
+  const callDealerCount = callDealerRow?.n ?? 0;
+  if (callDealerCount > 0) {
+    score += Math.min(callDealerCount, 3) * weights.call_dealer;
+    reasons.push(`Tapped "Call Dealer" ${callDealerCount} time${callDealerCount === 1 ? "" : "s"}`);
   }
 
   const [sessionRow] = await db

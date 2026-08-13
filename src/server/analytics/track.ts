@@ -30,7 +30,8 @@ export type BehavioralEventType =
   | "show_me_similar"
   | "partner_invite_created"
   | "partner_joined"
-  | "shared_match_viewed";
+  | "shared_match_viewed"
+  | "call_dealer_clicked";
 
 export interface TrackEventParams {
   consumerProfileId: string | null;

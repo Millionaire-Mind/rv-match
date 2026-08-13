@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck, MapPin, MessageCircle, Tag } from "lucide-react";
+import { CalendarCheck, HandCoins, MapPin, MessageCircle, Phone, Tag, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,13 @@ import { formatCurrency, formatDistance } from "@/lib/utils";
 import { rvTypeLabels, type RvType } from "@/server/validation/enums";
 import { recordClientEvent } from "@/server/discovery/actions";
 
-type CtaType = "check_availability" | "ask_question" | "request_best_price" | "schedule_walkthrough";
+type CtaType =
+  | "check_availability"
+  | "ask_question"
+  | "request_best_price"
+  | "schedule_walkthrough"
+  | "estimate_trade"
+  | "financing_info";
 
 interface RvDetailViewProps {
   rv: {
@@ -73,6 +79,10 @@ export function RvDetailView({
   function openLead(cta: CtaType) {
     recordClientEvent("lead_started", rv.id, { ctaType: cta }).catch(() => undefined);
     setLeadDialog(cta);
+  }
+
+  function handleCallDealer() {
+    recordClientEvent("call_dealer_clicked", rv.id, { dealershipId: dealer?.id }).catch(() => undefined);
   }
 
   return (
@@ -228,6 +238,24 @@ export function RvDetailView({
           <Button variant="outline" className="w-full" onClick={() => openLead("request_best_price")}>
             Request Best Price
           </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => openLead("estimate_trade")}>
+              <Wallet className="h-4 w-4" />
+              Estimate My Trade
+            </Button>
+            <Button variant="outline" onClick={() => openLead("financing_info")}>
+              <HandCoins className="h-4 w-4" />
+              Financing Info
+            </Button>
+          </div>
+          {dealer?.phone && (
+            <Button asChild variant="outline" className="w-full" onClick={handleCallDealer}>
+              <a href={`tel:${dealer.phone}`}>
+                <Phone className="h-4 w-4" />
+                Call Dealer
+              </a>
+            </Button>
+          )}
           <ShowMeSimilarButton inventoryId={rv.id} />
           <SaveShareButtons
             inventoryId={rv.id}
@@ -237,19 +265,26 @@ export function RvDetailView({
         </div>
       </div>
 
-      {(["check_availability", "ask_question", "request_best_price", "schedule_walkthrough"] as const).map(
-        (cta) => (
-          <LeadDialog
-            key={cta}
-            open={leadDialog === cta}
-            onOpenChange={(open) => setLeadDialog(open ? cta : null)}
-            inventoryId={rv.id}
-            ctaType={cta}
-            title={ctaTitles[cta]}
-            description={ctaDescriptions[cta]}
-          />
-        ),
-      )}
+      {(
+        [
+          "check_availability",
+          "ask_question",
+          "request_best_price",
+          "schedule_walkthrough",
+          "estimate_trade",
+          "financing_info",
+        ] as const
+      ).map((cta) => (
+        <LeadDialog
+          key={cta}
+          open={leadDialog === cta}
+          onOpenChange={(open) => setLeadDialog(open ? cta : null)}
+          inventoryId={rv.id}
+          ctaType={cta}
+          title={ctaTitles[cta]}
+          description={ctaDescriptions[cta]}
+        />
+      ))}
     </div>
   );
 }
@@ -268,6 +303,8 @@ const ctaTitles: Record<CtaType, string> = {
   ask_question: "Ask a Question",
   request_best_price: "Request Best Price",
   schedule_walkthrough: "Schedule a Walkthrough",
+  estimate_trade: "Estimate My Trade",
+  financing_info: "Financing Information",
 };
 
 const ctaDescriptions: Record<CtaType, string> = {
@@ -275,4 +312,6 @@ const ctaDescriptions: Record<CtaType, string> = {
   ask_question: "Send the dealer a question about this RV.",
   request_best_price: "Ask the dealer for their best price on this unit.",
   schedule_walkthrough: "Request an in-person or video walkthrough appointment.",
+  estimate_trade: "Tell us about your current RV and the dealer will follow up with a trade-in estimate.",
+  financing_info: "Ask the dealer for financing options and estimated payments on this unit.",
 };

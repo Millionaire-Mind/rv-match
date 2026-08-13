@@ -23,6 +23,7 @@ const weights: IntentWeights = {
   detail_view: 4,
   repeat_session: 8,
   video_complete: 3,
+  call_dealer: 25,
   proximityBonusMax: 10,
   proximityBonusMiles: 30,
 };
@@ -110,6 +111,50 @@ describe("computeIntentScore", () => {
 
     expect(after.score).toBeGreaterThan(before.score);
     expect(after.reasons.some((r) => r.includes("dealer's inventory"))).toBe(true);
+  });
+
+  it("scores estimate_trade and financing_info CTAs above zero, using the dormant trade/financing weights", async () => {
+    const trade = await computeIntentScore({
+      consumerProfileId,
+      dealershipId,
+      ctaType: "estimate_trade",
+      weights,
+    });
+    expect(trade.score).toBeGreaterThan(0);
+    expect(trade.reasons).toContain("Asked for a trade-in estimate");
+
+    const financing = await computeIntentScore({
+      consumerProfileId,
+      dealershipId,
+      ctaType: "financing_info",
+      weights,
+    });
+    expect(financing.score).toBeGreaterThan(0);
+    expect(financing.reasons).toContain("Requested financing information");
+  });
+
+  it("increases with repeated Call Dealer taps, capped at 3 counted occurrences", async () => {
+    const before = await computeIntentScore({
+      consumerProfileId,
+      dealershipId,
+      ctaType: "ask_question",
+      weights,
+    });
+
+    await db.insert(behavioralEvents).values([
+      { consumerProfileId, eventType: "call_dealer_clicked" },
+      { consumerProfileId, eventType: "call_dealer_clicked" },
+    ]);
+
+    const after = await computeIntentScore({
+      consumerProfileId,
+      dealershipId,
+      ctaType: "ask_question",
+      weights,
+    });
+
+    expect(after.score).toBeGreaterThan(before.score);
+    expect(after.reasons.some((r) => r.includes("Call Dealer"))).toBe(true);
   });
 
   it("caps the score at 100", async () => {

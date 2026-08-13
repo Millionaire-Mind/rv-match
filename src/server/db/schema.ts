@@ -70,6 +70,8 @@ export const leadCtaTypeEnum = pgEnum("lead_cta_type", [
   "ask_question",
   "request_best_price",
   "schedule_walkthrough",
+  "estimate_trade",
+  "financing_info",
 ]);
 export const preferredContactMethodEnum = pgEnum("preferred_contact_method", [
   "email",

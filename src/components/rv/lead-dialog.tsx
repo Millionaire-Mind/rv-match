@@ -20,7 +20,13 @@ import {
 import { submitLead, type LeadFormState } from "@/server/leads/actions";
 import { brand } from "@/config/brand";
 
-type CtaType = "check_availability" | "ask_question" | "request_best_price" | "schedule_walkthrough";
+type CtaType =
+  | "check_availability"
+  | "ask_question"
+  | "request_best_price"
+  | "schedule_walkthrough"
+  | "estimate_trade"
+  | "financing_info";
 
 interface LeadDialogProps {
   open: boolean;

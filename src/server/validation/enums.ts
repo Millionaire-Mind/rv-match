@@ -39,6 +39,8 @@ export const leadCtaTypeValues = [
   "ask_question",
   "request_best_price",
   "schedule_walkthrough",
+  "estimate_trade",
+  "financing_info",
 ] as const;
 export const leadCtaTypeSchema = z.enum(leadCtaTypeValues);
 
@@ -47,6 +49,8 @@ export const leadCtaLabels: Record<(typeof leadCtaTypeValues)[number], string> =
   ask_question: "Ask a Question",
   request_best_price: "Request Best Price",
   schedule_walkthrough: "Schedule Walkthrough",
+  estimate_trade: "Estimate My Trade",
+  financing_info: "Financing Information",
 };
 
 export const preferredContactMethodSchema = z.enum(["email", "phone", "text"]);

@@ -38,7 +38,7 @@ export interface CatalogEntry {
   photoColors: string[]; // one placeholder "photo" generated per color
 }
 
-export const CATALOG: CatalogEntry[] = [
+const HAND_CATALOG: CatalogEntry[] = [
   {
     stockNumber: "RV-1001",
     year: 2024,
@@ -500,3 +500,96 @@ export const CATALOG: CatalogEntry[] = [
     photoColors: ["8a2a2a", "6a1f1f", "aa3a3a"],
   },
 ];
+
+/**
+ * Procedurally varies a pool of realistic make/model/floorplan/type
+ * combinations to round the demo catalog out to 50+ RVs (per
+ * IMPLEMENTATION_PLAN.md's seed-data requirement) without hand-authoring
+ * dozens of near-duplicate literal entries. Every generated RV is still a
+ * fully realistic, internally-consistent spec — just combinatorially
+ * assembled rather than typed out one by one.
+ */
+const GENERATOR_POOL: Array<{
+  make: string;
+  model: string;
+  rvType: CatalogEntry["rvType"];
+  basePrice: number;
+  baseLength: number;
+  colorFamily: string[];
+}> = [
+  { make: "Forest River", model: "Salem", rvType: "travel_trailer", basePrice: 32000, baseLength: 29, colorFamily: ["2e5f4f", "1c3f34", "47876f"] },
+  { make: "Keystone", model: "Bullet", rvType: "travel_trailer", basePrice: 28500, baseLength: 27, colorFamily: ["3a4f6b", "26344a", "5a7396"] },
+  { make: "Jayco", model: "Eagle", rvType: "fifth_wheel", basePrice: 58000, baseLength: 35, colorFamily: ["6b4a2e", "4a331f", "8a6947"] },
+  { make: "Grand Design", model: "Solitude", rvType: "fifth_wheel", basePrice: 84000, baseLength: 39, colorFamily: ["4a4a4a", "2e2e2e", "6e6e6e"] },
+  { make: "Thor", model: "Chateau", rvType: "class_c", basePrice: 118000, baseLength: 30, colorFamily: ["7a2e2e", "521f1f", "9c4747"] },
+  { make: "Winnebago", model: "Vista", rvType: "class_a", basePrice: 165000, baseLength: 34, colorFamily: ["2e4a6b", "1c334a", "477096"] },
+  { make: "Coachmen", model: "Catalina", rvType: "travel_trailer", basePrice: 26000, baseLength: 24, colorFamily: ["5f6b2e", "424a1f", "899647"] },
+  { make: "Heartland", model: "Bighorn", rvType: "fifth_wheel", basePrice: 72000, baseLength: 37, colorFamily: ["6b2e4a", "4a1f33", "965b7d"] },
+  { make: "Forest River", model: "Vibe", rvType: "travel_trailer", basePrice: 31000, baseLength: 28, colorFamily: ["2e6b64", "1f4a45", "479c93"] },
+  { make: "Palomino", model: "Puma", rvType: "travel_trailer", basePrice: 29500, baseLength: 30, colorFamily: ["6b5a2e", "4a3d1f", "96814a"] },
+  { make: "Keystone", model: "Fuzion", rvType: "toy_hauler", basePrice: 98000, baseLength: 40, colorFamily: ["2e2e2e", "141414", "474747"] },
+  { make: "Jayco", model: "Redhawk", rvType: "class_c", basePrice: 128000, baseLength: 26, colorFamily: ["3a2e6b", "26194a", "5c4796"] },
+  { make: "Winnebago", model: "Solis", rvType: "class_b", basePrice: 142000, baseLength: 21, colorFamily: ["4a4a4a", "2e2e2e", "6e6e6e"] },
+  { make: "Grand Design", model: "Transcend", rvType: "travel_trailer", basePrice: 34000, baseLength: 32, colorFamily: ["2e4a3f", "1c3327", "477060"] },
+  { make: "Forest River", model: "Georgetown", rvType: "class_a", basePrice: 195000, baseLength: 36, colorFamily: ["6b2e2e", "4a1f1f", "965050"] },
+  { make: "Coachmen", model: "Leprechaun", rvType: "class_c", basePrice: 121000, baseLength: 29, colorFamily: ["2e5f6b", "1f424a", "47899c"] },
+];
+
+const FLOORPLAN_SUFFIXES = ["BH", "RL", "RK", "FL", "MB", "TT", "RB", "BHS"];
+
+function seededColor(base: string, offset: number): string {
+  const num = parseInt(base, 16);
+  const shifted = (num + offset * 0x040404) % 0xffffff;
+  return shifted.toString(16).padStart(6, "0");
+}
+
+function generateCatalogEntries(count: number): CatalogEntry[] {
+  const entries: CatalogEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    const spec = GENERATOR_POOL[i % GENERATOR_POOL.length];
+    const variant = Math.floor(i / GENERATOR_POOL.length);
+    const year = 2021 + (i % 4);
+    const condition: CatalogEntry["condition"] = year >= 2024 ? "new" : "used";
+    const priceJitter = 1 + (((i * 37) % 21) - 10) / 100; // +/-10%
+    const salePrice = Math.round((spec.basePrice * priceJitter) / 100) * 100;
+    const bunkhouse = i % 3 === 0;
+    const toyHauler = spec.rvType === "toy_hauler";
+    const outdoorKitchen = i % 2 === 0 && !toyHauler;
+    const slideCount = spec.rvType === "class_a" || spec.rvType === "fifth_wheel" ? 2 + (i % 3) : i % 2;
+    const lengthFeet = spec.baseLength + (i % 5) - 2;
+
+    entries.push({
+      stockNumber: `RV-${2100 + i}`,
+      year,
+      make: spec.make,
+      model: spec.model,
+      floorplan: `${28 + (i % 12)}${FLOORPLAN_SUFFIXES[i % FLOORPLAN_SUFFIXES.length]}${variant > 0 ? variant : ""}`,
+      rvType: spec.rvType,
+      condition,
+      msrp: Math.round((salePrice * 1.15) / 100) * 100,
+      salePrice,
+      lengthFeet,
+      dryWeightLbs: 3800 + lengthFeet * 220,
+      gvwrLbs: 4800 + lengthFeet * 260,
+      sleeps: bunkhouse ? 6 + (i % 3) : 2 + (i % 4),
+      slideCount,
+      bunkhouse,
+      toyHauler,
+      outdoorKitchen,
+      exteriorColor: ["Alpine White", "Champagne", "Slate", "Onyx", "Sage"][i % 5],
+      features: [
+        ...(bunkhouse ? ["Bunkhouse"] : []),
+        ...(outdoorKitchen ? ["Outdoor Kitchen"] : []),
+        ...(toyHauler ? ["Garage Ramp Door"] : []),
+        "Power Awning",
+      ],
+      description: `A ${condition} ${spec.make} ${spec.model} with ${lengthFeet} feet of living space, well suited for ${
+        bunkhouse ? "families" : "couples"
+      }.`,
+      photoColors: spec.colorFamily.map((c) => seededColor(c, variant)),
+    });
+  }
+  return entries;
+}
+
+export const CATALOG: CatalogEntry[] = [...HAND_CATALOG, ...generateCatalogEntries(32)];

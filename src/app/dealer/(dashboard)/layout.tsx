@@ -6,6 +6,7 @@ import { getPilotSummary } from "@/server/dealer/analytics";
 import { Badge } from "@/components/ui/badge";
 import { brand } from "@/config/brand";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { DemoModeBadge } from "@/components/demo-mode-badge";
 
 export default async function DealerDashboardLayout({ children }: { children: React.ReactNode }) {
   const { dealership, role } = await requireDealerContext();
@@ -64,6 +65,7 @@ export default async function DealerDashboardLayout({ children }: { children: Re
           ))}
         </nav>
         <div className="mt-auto hidden flex-col gap-3 pt-6 lg:flex">
+          <DemoModeBadge />
           <p className="text-xs text-muted-foreground">{dealership.name}</p>
           {pilot && (
             <Badge variant={pilot.daysRemaining < 14 ? "warning" : "secondary"} className="w-fit">

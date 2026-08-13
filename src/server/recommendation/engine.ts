@@ -23,7 +23,7 @@ export interface ScoredInventory {
   distanceMiles: number | null;
 }
 
-interface ConsumerContext {
+export interface ConsumerContext {
   lat: number | null;
   lng: number | null;
   radiusMiles: number;
@@ -80,7 +80,7 @@ function priceAffinityScore(
   return Math.exp(-0.5 * z * z);
 }
 
-function distanceScore(
+export function distanceScore(
   rv: { lat: string | null; lng: string | null },
   ctx: ConsumerContext,
   decayMiles: number,

@@ -4,6 +4,7 @@ import { LayoutDashboard, Settings, ShieldCheck, Store } from "lucide-react";
 import { requireAdminContext } from "@/server/admin/context";
 import { brand } from "@/config/brand";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { DemoModeBadge } from "@/components/demo-mode-badge";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdminContext();
@@ -33,7 +34,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </Link>
           ))}
         </nav>
-        <div className="mt-auto hidden pt-6 lg:block">
+        <div className="mt-auto hidden flex-col gap-3 pt-6 lg:flex">
+          <DemoModeBadge />
           <SignOutButton />
         </div>
       </aside>

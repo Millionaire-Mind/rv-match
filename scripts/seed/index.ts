@@ -90,7 +90,7 @@ async function main() {
       zip: "80202",
       email: "owner@rockymountainrv.example",
       contactName: "Dana Rios",
-      catalog: CATALOG.slice(0, 10),
+      catalog: CATALOG.slice(0, Math.ceil(CATALOG.length / 2)),
     },
     {
       slug: "sunshine-state-rv-superstore",
@@ -100,7 +100,7 @@ async function main() {
       zip: "33602",
       email: "owner@sunshinestatervs.example",
       contactName: "Marcus Lee",
-      catalog: CATALOG.slice(10, 20),
+      catalog: CATALOG.slice(Math.ceil(CATALOG.length / 2)),
     },
   ];
 

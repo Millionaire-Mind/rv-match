@@ -10,6 +10,15 @@ import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { csvRowSchema } from "@/server/validation/inventory";
 import { logAudit } from "@/server/audit/log";
 import { revalidatePath } from "next/cache";
+import { geocodeZip } from "@/server/geo/zip-centroids";
+
+/** Mirrors src/server/dealer/inventory-actions.ts's geocodeForZip - a CSV row with no/unrecognizable ZIP honestly gets no coordinates rather than a guessed default. */
+function geocodeForZip(zipCode: string | undefined): { lat: string | null; lng: string | null } {
+  if (!zipCode) return { lat: null, lng: null };
+  const geo = geocodeZip(zipCode);
+  if (!geo) return { lat: null, lng: null };
+  return { lat: geo.lat.toFixed(6), lng: geo.lng.toFixed(6) };
+}
 
 export interface CsvImportRowResult {
   row: number;
@@ -80,6 +89,7 @@ export async function importInventoryCsv(
     try {
       const existing = existingByStock.get(d.stock_number);
       const salePriceCents = Math.round(d.sale_price * 100);
+      const geo = geocodeForZip(d.zip_code);
 
       if (existing) {
         if (existing.salePriceCents !== salePriceCents) {
@@ -115,6 +125,8 @@ export async function importInventoryCsv(
             city: d.city,
             state: d.state,
             zipCode: d.zip_code,
+            lat: geo.lat,
+            lng: geo.lng,
             source: "csv_import",
           })
           .where(eq(inventory.id, existing.id));
@@ -150,6 +162,8 @@ export async function importInventoryCsv(
             city: d.city,
             state: d.state,
             zipCode: d.zip_code,
+            lat: geo.lat,
+            lng: geo.lng,
             status: "draft",
             source: "csv_import",
           })

@@ -33,10 +33,10 @@ describe("distanceScore (radius/distance filtering)", () => {
     expect(close.score).toBeGreaterThan(far.score);
   });
 
-  it("treats missing location data as neutral and always within radius", () => {
+  it("does NOT count an RV with unknown coordinates as within a consumer's set radius (Phase 7: honest geography)", () => {
     const noLocationRv = { lat: null, lng: null };
     const result = distanceScore(noLocationRv, nearDenver, 60);
-    expect(result.withinRadius).toBe(true);
+    expect(result.withinRadius).toBe(false);
     expect(result.miles).toBeNull();
   });
 

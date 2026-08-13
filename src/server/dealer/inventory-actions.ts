@@ -24,6 +24,7 @@ import { uploadBuffer } from "@/server/storage";
 import { logAudit } from "@/server/audit/log";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { validateAndNormalizeUploadedVideo } from "@/server/video/validate";
+import { geocodeZip } from "@/server/geo/zip-centroids";
 
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024; // 300MB
@@ -31,6 +32,23 @@ const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 
 export type InventoryFormState = { ok: false; error: string } | { ok: true; inventoryId: string };
+
+/**
+ * Dealer-created/imported inventory previously never got lat/lng at all -
+ * only the seed data called geocodeZip, so location/radius filtering
+ * silently didn't work for anything a real dealer actually entered. Honest
+ * about what it doesn't know: no ZIP (it's optional on the form) means no
+ * coordinates, not a guessed/default location - see distanceScore in
+ * src/server/recommendation/engine.ts, which now treats missing RV
+ * coordinates as NOT confirmed within a consumer's radius, rather than
+ * defaulting to "eligible."
+ */
+function geocodeForZip(zipCode: string | undefined): { lat: string | null; lng: string | null } {
+  if (!zipCode) return { lat: null, lng: null };
+  const geo = geocodeZip(zipCode);
+  if (!geo) return { lat: null, lng: null };
+  return { lat: geo.lat.toFixed(6), lng: geo.lng.toFixed(6) };
+}
 
 function parseInventoryForm(formData: FormData) {
   return inventoryFormSchema.safeParse({
@@ -78,6 +96,8 @@ export async function createInventory(
     return { ok: false, error: `Stock number ${d.stockNumber} is already in use.` };
   }
 
+  const geo = geocodeForZip(d.zipCode);
+
   const [rv] = await db
     .insert(inventory)
     .values({
@@ -106,6 +126,8 @@ export async function createInventory(
       city: d.city,
       state: d.state,
       zipCode: d.zipCode,
+      lat: geo.lat,
+      lng: geo.lng,
       status: "draft",
       source: "manual",
     })
@@ -167,6 +189,12 @@ export async function updateInventory(
     });
   }
 
+  // Re-derive from the submitted ZIP every time (cheap, deterministic, no
+  // external API) rather than only on create - a dealer fixing a typo'd
+  // ZIP, or clearing it, should immediately fix/clear the coordinates too
+  // instead of leaving stale ones in place.
+  const geo = geocodeForZip(d.zipCode);
+
   await db
     .update(inventory)
     .set({
@@ -194,6 +222,8 @@ export async function updateInventory(
       city: d.city,
       state: d.state,
       zipCode: d.zipCode,
+      lat: geo.lat,
+      lng: geo.lng,
     })
     .where(eq(inventory.id, inventoryId));
 

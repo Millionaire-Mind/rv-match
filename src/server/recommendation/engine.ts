@@ -87,8 +87,20 @@ export function distanceScore(
   ctx: ConsumerContext,
   decayMiles: number,
 ): { score: number; withinRadius: boolean; miles: number | null } {
-  if (!ctx.lat || !ctx.lng || !rv.lat || !rv.lng) {
+  if (!ctx.lat || !ctx.lng) {
+    // The consumer hasn't set a location yet, so no radius restriction
+    // applies at all - neutral either way.
     return { score: 0.6, withinRadius: true, miles: null };
+  }
+  if (!rv.lat || !rv.lng) {
+    // The RV's actual distance from this consumer is genuinely unknown.
+    // Treating that as "within radius" would be dishonest - it could be
+    // anywhere - so it's excluded from radius-filtered results rather
+    // than assumed nearby. getDiscoveryBatch still falls back to the
+    // full unfiltered pool when too few candidates pass the radius
+    // filter, so this doesn't hide such an RV entirely, only stops it
+    // from being counted as a confirmed nearby match.
+    return { score: 0.6, withinRadius: false, miles: null };
   }
   const miles = haversineMiles(
     { lat: ctx.lat, lng: ctx.lng },

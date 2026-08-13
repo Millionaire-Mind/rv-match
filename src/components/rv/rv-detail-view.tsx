@@ -5,7 +5,7 @@ import { CalendarCheck, MapPin, MessageCircle, Tag } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { VideoPlayer } from "@/components/discovery/video-player";
+import { VideoPlayer, videoMilestoneToEventType } from "@/components/discovery/video-player";
 import { LeadDialog } from "./lead-dialog";
 import { SaveShareButtons } from "./save-share-buttons";
 import { formatCurrency, formatDistance } from "@/lib/utils";
@@ -83,7 +83,13 @@ export function RvDetailView({
             poster={photos[0] ?? null}
             captionSrc={videoCaptionUrl}
             active
+            allowTapToPause
             className="h-full w-full"
+            onMilestone={(milestone, progress) => {
+              recordClientEvent(videoMilestoneToEventType(milestone), rv.id, progress && { ...progress }).catch(
+                () => undefined,
+              );
+            }}
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element

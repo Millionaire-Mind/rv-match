@@ -8,6 +8,7 @@ import { RvDetailView } from "@/components/rv/rv-detail-view";
 import { trackEvent } from "@/server/analytics/track";
 import { updatePreferencesForEvent } from "@/server/recommendation/preferences";
 import { loadRecommendationWeights } from "@/server/recommendation/config";
+import { checkRateLimit } from "@/server/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +45,18 @@ export default async function RvDetailPage({ params }: { params: Promise<{ id: s
       dealershipId: rv.dealershipId,
     }),
     (async () => {
-      const weights = await loadRecommendationWeights();
-      await updatePreferencesForEvent(consumerProfileId, rv, "detail_view", weights);
+      // This route is force-dynamic and re-runs on every navigation/
+      // refresh, so without a cooldown here, simply reloading the page
+      // repeatedly would re-apply the "detail_view" preference weight
+      // every time - a trivial way to farm an RV's attribute scores.
+      // Repeat views within the window are still logged above via
+      // trackEvent (real analytics signal); only the preference-scoring
+      // side effect is throttled.
+      const allowed = checkRateLimit(`pref-event:${consumerProfileId}:${rv.id}:detail_view`, 1, 5 * 60 * 1000);
+      if (allowed) {
+        const weights = await loadRecommendationWeights();
+        await updatePreferencesForEvent(consumerProfileId, rv, "detail_view", weights);
+      }
     })(),
   ]);
 

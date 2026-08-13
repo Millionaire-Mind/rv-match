@@ -7,6 +7,23 @@ import type { RecommendationWeights } from "./config";
 
 export type SwipeDecisionType = "pass" | "like" | "love" | "more_like_this";
 
+/** Accepts either the module-level `db` or a `tx` from `db.transaction(...)`, so callers can keep the read-decide-write sequence atomic. */
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** The weight a swipe decision contributes, before it's applied - exposed so callers (e.g. a decision-change delta) can compute old vs. new weight without duplicating the fast-swipe-penalty logic. */
+export function weightForSwipeDecision(
+  decision: SwipeDecisionType,
+  swipeDurationMs: number | null,
+  weights: RecommendationWeights,
+): number {
+  let weight = weights[decision];
+  const isFastSwipe = swipeDurationMs !== null && swipeDurationMs < weights.fast_swipe_threshold_ms;
+  if (isFastSwipe && decision === "pass") {
+    weight += weights.fast_swipe_penalty;
+  }
+  return weight;
+}
+
 /**
  * Applies a swipe decision's signal to every attribute-value pair the RV
  * carries, upserting `consumer_preferences`. This is the write side of the
@@ -18,15 +35,10 @@ export async function updatePreferencesForSwipe(
   decision: SwipeDecisionType,
   swipeDurationMs: number | null,
   weights: RecommendationWeights,
+  executor: Executor = db,
 ): Promise<void> {
-  let weight = weights[decision];
-  const isFastSwipe =
-    swipeDurationMs !== null && swipeDurationMs < weights.fast_swipe_threshold_ms;
-  if (isFastSwipe && decision === "pass") {
-    weight += weights.fast_swipe_penalty;
-  }
-
-  await applyPreferenceDelta(consumerProfileId, rv, weight);
+  const weight = weightForSwipeDecision(decision, swipeDurationMs, weights);
+  await applyPreferenceDelta(consumerProfileId, rv, weight, executor);
 }
 
 export async function updatePreferencesForEvent(
@@ -34,20 +46,28 @@ export async function updatePreferencesForEvent(
   rv: InventoryRow,
   eventType: "video_complete" | "video_replayed" | "save" | "detail_view",
   weights: RecommendationWeights,
+  executor: Executor = db,
 ): Promise<void> {
-  await applyPreferenceDelta(consumerProfileId, rv, weights[eventType]);
+  await applyPreferenceDelta(consumerProfileId, rv, weights[eventType], executor);
 }
 
-async function applyPreferenceDelta(
+export async function applyPreferenceDelta(
   consumerProfileId: string,
   rv: InventoryRow,
   weight: number,
+  executor: Executor = db,
 ): Promise<void> {
+  // A net-zero delta (e.g. a decision "changed" to something worth the
+  // same weight) still shouldn't bump `observations` - that field feeds
+  // confidence damping (see normalizedAttributeScore), and a no-op signal
+  // isn't a new observation.
+  if (weight === 0) return;
+
   const attrs = attributesForInventory(rv);
   if (attrs.length === 0) return;
 
   for (const { attribute, value } of attrs) {
-    await db
+    await executor
       .insert(consumerPreferences)
       .values({
         consumerProfileId,

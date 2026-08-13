@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { DiscoveryCard } from "./discovery-card";
 import { SwipeButtons } from "./swipe-buttons";
 import { LocationPrompt } from "./location-prompt";
+import { videoMilestoneToEventType, type VideoMilestone, type VideoWatchProgress } from "./video-player";
 import type { DiscoveryCardDTO } from "@/server/discovery/dto";
 import {
   fetchDiscoveryBatch,
@@ -45,10 +46,20 @@ export function DiscoveryFeed({
   const swipeStartedAt = useRef<number>(0);
   const fetchingRef = useRef(false);
   const learningShown = useRef(false);
+  const indexRef = useRef(0);
 
   useEffect(() => {
     swipeStartedAt.current = Date.now();
   }, [index]);
+
+  // Always-current index for async callbacks (fetch responses, etc.) that
+  // shouldn't act on a value captured back when they were kicked off - see
+  // handleMoreLikeThis, which needs to know how many swipes have happened
+  // by the time its re-rank fetch resolves, not how many had happened when
+  // it started.
+  useEffect(() => {
+    indexRef.current = index;
+  });
 
   const loadMore = useCallback(async () => {
     if (fetchingRef.current) return;
@@ -113,7 +124,53 @@ export function DiscoveryFeed({
 
   function handleMoreLikeThis() {
     if (!currentCard) return;
-    advance("more_like_this", currentCard);
+    const card = currentCard;
+    const swipeDurationMs = Date.now() - swipeStartedAt.current;
+    setIndex((i) => i + 1);
+
+    submitSwipeDecision({ inventoryId: card.id, decision: "more_like_this", swipeDurationMs })
+      .then(async ({ decisionsCount: newCount }) => {
+        setDecisionsCount(newCount);
+
+        if (!learningShown.current && newCount >= 5) {
+          learningShown.current = true;
+          setLearningToast(true);
+          setTimeout(() => setLearningToast(false), 3200);
+        }
+        if (!locationKnown && newCount >= locationPromptThreshold) {
+          setLocationPromptOpen(true);
+        }
+        if (newCount >= matchCompleteThreshold) {
+          router.push("/match");
+          return;
+        }
+
+        // MORE LIKE THIS is meant to change the *next* recommendations the
+        // consumer sees, not just a future prefetch batch several swipes
+        // away - re-fetch now that the preference update above has been
+        // persisted, and splice the fresh (already preference-aware,
+        // already-swiped-exclusion-aware) results in behind whatever
+        // card is currently on screen. Reading indexRef.current here
+        // (rather than closing over `index`) means this still does the
+        // right thing even if the consumer swiped again before this
+        // fetch resolved - it only ever replaces cards genuinely not yet
+        // shown, never the one currently in front of them.
+        try {
+          const fresh = await fetchDiscoveryBatch(8);
+          setCards((prev) => {
+            const keepThrough = indexRef.current + 1; // current card on screen stays stable
+            const stable = prev.slice(0, keepThrough);
+            const stableIds = new Set(stable.map((c) => c.id));
+            const freshUnseen = fresh.filter((c) => !stableIds.has(c.id));
+            return [...stable, ...freshUnseen];
+          });
+        } catch {
+          // Keep whatever was already queued if the re-fetch fails - the
+          // preference update itself already succeeded and will still
+          // show up in the next real prefetch.
+        }
+      })
+      .catch(() => undefined);
   }
 
   function handleSave() {
@@ -173,19 +230,11 @@ export function DiscoveryFeed({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  function handleMilestone(
-    milestone: "started" | "25" | "50" | "75" | "complete" | "replayed",
-  ) {
+  function handleMilestone(milestone: VideoMilestone, progress?: VideoWatchProgress) {
     if (!currentCard) return;
-    const eventType =
-      milestone === "started"
-        ? "video_started"
-        : milestone === "complete"
-          ? "video_complete"
-          : milestone === "replayed"
-            ? "video_replayed"
-            : (`video_${milestone}` as const);
-    recordClientEvent(eventType, currentCard.id).catch(() => undefined);
+    recordClientEvent(videoMilestoneToEventType(milestone), currentCard.id, progress && { ...progress }).catch(
+      () => undefined,
+    );
   }
 
   if (!currentCard) {

@@ -7,13 +7,13 @@ import { ChevronUp, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDistance } from "@/lib/utils";
 import type { DiscoveryCardDTO } from "@/server/discovery/dto";
-import { VideoPlayer } from "./video-player";
+import { VideoPlayer, type VideoMilestone, type VideoWatchProgress } from "./video-player";
 
 interface DiscoveryCardProps {
   card: DiscoveryCardDTO;
   active: boolean;
   onDecision: (decision: "pass" | "like" | "love") => void;
-  onMilestone: (milestone: "started" | "25" | "50" | "75" | "complete" | "replayed") => void;
+  onMilestone: (milestone: VideoMilestone, progress?: VideoWatchProgress) => void;
 }
 
 const SWIPE_THRESHOLD = 120;

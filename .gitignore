@@ -32,8 +32,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files - .env.example is a placeholder-only template and must be
+# committed (README.md's setup instructions depend on it existing in the
+# repo); everything else that matches .env* stays ignored since it may hold
+# real secrets.
 .env*
+!.env.example
 
 # vercel
 .vercel

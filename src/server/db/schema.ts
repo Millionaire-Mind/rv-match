@@ -137,6 +137,27 @@ export const consumerProfiles = pgTable("consumer_profiles", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * "Compare With My Partner" invite links. Joining a link only ever attaches
+ * an existing (or freshly created) consumer_profiles row as the partner -
+ * it never merges the two profiles the way anonymous->signed-in merge does.
+ * Each side keeps its own independent swipe/preference history; only the
+ * shared-match view (src/server/partner/shared-matches.ts) reads both.
+ */
+export const partnerLinks = pgTable("partner_links", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerConsumerProfileId: uuid("owner_consumer_profile_id")
+    .notNull()
+    .references(() => consumerProfiles.id, { onDelete: "cascade" }),
+  partnerConsumerProfileId: uuid("partner_consumer_profile_id").references(() => consumerProfiles.id, {
+    onDelete: "set null",
+  }),
+  token: text("token").notNull().unique(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  joinedAt: timestamp("joined_at", { withTimezone: true }),
+});
+
 // ---------------------------------------------------------------------------
 // Dealerships
 // ---------------------------------------------------------------------------

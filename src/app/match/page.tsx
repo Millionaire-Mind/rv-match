@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { RadiusSelect } from "@/components/match/radius-select";
 import { LocationPromptInline } from "@/components/discovery/location-prompt-inline";
+import { PartnerInviteButton } from "@/components/partner/partner-invite-button";
 import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { getConsumerLocationState } from "@/server/discovery/location";
 import { getBehaviorSnapshot, getDecisionsCount } from "@/server/recommendation/profile";
@@ -85,6 +86,10 @@ export default async function MatchPage() {
       </div>
 
       {!locationState.hasLocation && <LocationPromptInline />}
+
+      <div className="mb-6">
+        <PartnerInviteButton />
+      </div>
 
       <section className="mb-8 rounded-2xl border border-border bg-card p-5">
         <p className="text-sm text-muted-foreground">

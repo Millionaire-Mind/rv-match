@@ -11,6 +11,7 @@ import {
   savedInventory,
   swipeDecisions,
 } from "@/server/db/schema";
+import { computePilotStatus, daysRemaining as daysRemainingFor } from "@/server/pilot/logic";
 
 export interface DealerKpis {
   inventoryLive: number;
@@ -182,12 +183,15 @@ export async function getPilotSummary(dealershipId: string): Promise<PilotSummar
     .limit(1);
   if (!pilot) return null;
 
-  const elapsedDays = Math.floor((Date.now() - pilot.startedAt.getTime()) / 86400000);
-  const daysRemaining = Math.max(0, pilot.trialDays - elapsedDays);
-
   return {
-    status: pilot.status,
-    daysRemaining,
+    status: computePilotStatus({
+      verifiedSalesCount: pilot.verifiedSalesCount,
+      salesThreshold: pilot.salesThreshold,
+      startedAt: pilot.startedAt,
+      trialDays: pilot.trialDays,
+      storedStatus: pilot.status,
+    }),
+    daysRemaining: daysRemainingFor(pilot.startedAt, pilot.trialDays),
     trialDays: pilot.trialDays,
     salesThreshold: pilot.salesThreshold,
     verifiedSalesCount: pilot.verifiedSalesCount,

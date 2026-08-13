@@ -22,6 +22,7 @@ import {
 import { inventoryFormSchema } from "@/server/validation/inventory";
 import { uploadBuffer } from "@/server/storage";
 import { logAudit } from "@/server/audit/log";
+import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024; // 300MB
@@ -65,7 +66,7 @@ export async function createInventory(
   _prev: InventoryFormState,
   formData: FormData,
 ): Promise<InventoryFormState> {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   const parsed = parseInventoryForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
@@ -140,7 +141,7 @@ export async function updateInventory(
   _prev: InventoryFormState,
   formData: FormData,
 ): Promise<InventoryFormState> {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   const parsed = parseInventoryForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
@@ -207,7 +208,7 @@ export async function setInventoryStatus(
   inventoryId: string,
   status: "draft" | "published" | "sold" | "archived",
 ): Promise<void> {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
   await db
     .update(inventory)
@@ -228,7 +229,7 @@ export async function uploadInventoryPhotos(
   inventoryId: string,
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
   const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { ok: true };
@@ -276,7 +277,7 @@ export async function uploadInventoryVideo(
   inventoryId: string,
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
   const file = formData.get("video");
   if (!(file instanceof File) || file.size === 0) return { ok: true };
@@ -304,7 +305,7 @@ export async function uploadInventoryVideo(
 }
 
 export async function setPrimaryVideo(dealershipId: string, inventoryId: string, videoId: string) {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
   await requireVideoBelongsToInventory(inventoryId, videoId);
   await db.update(inventory).set({ primaryVideoId: videoId }).where(eq(inventory.id, inventoryId));
@@ -323,7 +324,7 @@ export async function setPrimaryVideo(dealershipId: string, inventoryId: string,
  * processing / completed / failed status.
  */
 export async function requestVideoGeneration(dealershipId: string, inventoryId: string) {
-  const { userId } = await requireDealerRole(dealershipId);
+  const { userId } = await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
   await db.insert(videoGenerationJobs).values({ inventoryId, requestedBy: userId });
   revalidatePath(`/dealer/inventory/${inventoryId}`);
@@ -331,7 +332,7 @@ export async function requestVideoGeneration(dealershipId: string, inventoryId: 
 
 /** Resets a failed job back to queued for the worker to pick up again - see requestVideoGeneration for why this doesn't process inline. */
 export async function retryVideoGeneration(dealershipId: string, jobId: string, inventoryId: string) {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   const job = await requireVideoJobInDealership(dealershipId, jobId);
   if (job.inventoryId !== inventoryId) {
     throw new Error("Video job does not match the requested RV.");

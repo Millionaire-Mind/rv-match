@@ -58,43 +58,57 @@ export async function submitDealerApplication(
   const slug = await uniqueSlug(d.dealershipName);
   const pilotDefaults = await loadPilotDefaults();
 
-  const [dealership] = await db
-    .insert(dealerships)
-    .values({
-      name: d.dealershipName,
-      slug,
-      addressLine1: d.addressLine1,
-      city: d.city,
-      state: d.state.toUpperCase(),
-      zipCode: d.zipCode,
-      phone: d.phone,
-      website: d.website || null,
-      primaryContactName: d.primaryContactName,
-      primaryContactEmail: d.email,
-      inventorySizeEstimate: d.inventorySizeEstimate,
-      status: "pending",
-    })
-    .returning({ id: dealerships.id });
+  // The auth account was already created above (authSignUp has its own
+  // side effects that can't be rolled back by a DB transaction), but the
+  // dealership + membership + pilot rows must succeed or fail together -
+  // otherwise a failure partway through leaves a real signed-up user
+  // stranded with no dealership membership (requireDealerContext would
+  // bounce them back to this same application form with no way to explain
+  // why) or a dealership with no pilot row.
+  try {
+    await db.transaction(async (tx) => {
+      const [dealership] = await tx
+        .insert(dealerships)
+        .values({
+          name: d.dealershipName,
+          slug,
+          addressLine1: d.addressLine1,
+          city: d.city,
+          state: d.state.toUpperCase(),
+          zipCode: d.zipCode,
+          phone: d.phone,
+          website: d.website || null,
+          primaryContactName: d.primaryContactName,
+          primaryContactEmail: d.email,
+          inventorySizeEstimate: d.inventorySizeEstimate,
+          status: "pending",
+        })
+        .returning({ id: dealerships.id });
 
-  await db.insert(dealershipUsers).values({
-    dealershipId: dealership.id,
-    userId,
-    role: "owner",
-  });
+      await tx.insert(dealershipUsers).values({
+        dealershipId: dealership.id,
+        userId,
+        role: "owner",
+      });
 
-  await db.insert(dealerPilots).values({
-    dealershipId: dealership.id,
-    trialDays: pilotDefaults.trial_days,
-    salesThreshold: pilotDefaults.sales_threshold,
-    status: "pending",
-  });
+      await tx.insert(dealerPilots).values({
+        dealershipId: dealership.id,
+        trialDays: pilotDefaults.trial_days,
+        salesThreshold: pilotDefaults.sales_threshold,
+        status: "pending",
+      });
 
-  await logAudit({
-    action: "dealer.apply",
-    entityType: "dealership",
-    entityId: dealership.id,
-    dealershipId: dealership.id,
-  });
+      await logAudit(
+        { action: "dealer.apply", entityType: "dealership", entityId: dealership.id, dealershipId: dealership.id },
+        tx,
+      );
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "Your account was created, but we couldn't finish setting up your dealership. Please contact support.",
+    };
+  }
 
   return { ok: true };
 }

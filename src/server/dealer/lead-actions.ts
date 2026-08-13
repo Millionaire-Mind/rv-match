@@ -1,19 +1,30 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/server/db/client";
-import { attributedSales, inventory, leadActivity, leads } from "@/server/db/schema";
+import { attributedSales, dealershipUsers, inventory, leadActivity, leads } from "@/server/db/schema";
 import { requireDealerRole } from "@/server/auth/guards";
+import { LEAD_WORKING_ROLES, MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { leadStatusSchema } from "@/server/validation/enums";
+import type { DealerRole } from "@/server/validation/enums";
 import { logAudit } from "@/server/audit/log";
 
-async function requireLeadInDealership(dealershipId: string, leadId: string) {
+/**
+ * Verifies the lead belongs to this dealership, and — for a salesperson,
+ * per the role matrix ("assigned/authorized leads" only, unlike Owner/Sales
+ * Manager who work every lead) — that it's either assigned to them or
+ * unclaimed. Owner and Sales Manager can work any lead at the dealership.
+ */
+async function requireLeadAccessible(dealershipId: string, leadId: string, userId: string, role: DealerRole) {
   const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
   if (!lead || lead.dealershipId !== dealershipId) {
     throw new Error("Lead not found.");
+  }
+  if (role === "salesperson" && lead.assignedTo && lead.assignedTo !== userId) {
+    throw new Error("This lead is assigned to another team member.");
   }
   return lead;
 }
@@ -24,8 +35,8 @@ export async function updateLeadStatus(
   status: z.infer<typeof leadStatusSchema>,
   note?: string,
 ): Promise<void> {
-  const { userId } = await requireDealerRole(dealershipId);
-  const lead = await requireLeadInDealership(dealershipId, leadId);
+  const { userId, role } = await requireDealerRole(dealershipId, LEAD_WORKING_ROLES);
+  const lead = await requireLeadAccessible(dealershipId, leadId, userId, role);
 
   await db.update(leads).set({ status }).where(eq(leads.id, leadId));
   await db.insert(leadActivity).values({
@@ -41,9 +52,19 @@ export async function updateLeadStatus(
   revalidatePath(`/dealer/leads/${leadId}`);
 }
 
+/** Assignment itself is a Sales Manager / Owner capability — a salesperson works leads, they don't reassign them. */
 export async function assignLead(dealershipId: string, leadId: string, assigneeId: string): Promise<void> {
-  const { userId } = await requireDealerRole(dealershipId);
-  await requireLeadInDealership(dealershipId, leadId);
+  const { userId } = await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
+  await requireLeadAccessible(dealershipId, leadId, userId, "owner");
+
+  const [assignee] = await db
+    .select({ id: dealershipUsers.id })
+    .from(dealershipUsers)
+    .where(
+      and(eq(dealershipUsers.dealershipId, dealershipId), eq(dealershipUsers.userId, assigneeId), eq(dealershipUsers.active, true)),
+    )
+    .limit(1);
+  if (!assignee) throw new Error("That team member is not an active member of this dealership.");
 
   await db.update(leads).set({ assignedTo: assigneeId }).where(eq(leads.id, leadId));
   await db.insert(leadActivity).values({
@@ -57,8 +78,8 @@ export async function assignLead(dealershipId: string, leadId: string, assigneeI
 
 export async function addLeadNote(dealershipId: string, leadId: string, note: string): Promise<void> {
   if (!note.trim()) return;
-  const { userId } = await requireDealerRole(dealershipId);
-  await requireLeadInDealership(dealershipId, leadId);
+  const { userId, role } = await requireDealerRole(dealershipId, LEAD_WORKING_ROLES);
+  await requireLeadAccessible(dealershipId, leadId, userId, role);
 
   await db.insert(leadActivity).values({
     leadId,
@@ -102,8 +123,8 @@ export async function markLeadSold(
   _prev: MarkSoldState,
   formData: FormData,
 ): Promise<MarkSoldState> {
-  const { userId } = await requireDealerRole(dealershipId);
-  const lead = await requireLeadInDealership(dealershipId, leadId);
+  const { userId, role } = await requireDealerRole(dealershipId, LEAD_WORKING_ROLES);
+  const lead = await requireLeadAccessible(dealershipId, leadId, userId, role);
 
   const parsed = markSoldSchema.safeParse({
     soldInventoryId: formData.get("soldInventoryId"),

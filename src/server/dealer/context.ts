@@ -36,5 +36,37 @@ export async function requireDealerContext() {
     .limit(1);
   if (!dealership) redirect("/dealer/apply");
 
+  // A dealership must be approved to use the full dashboard - pending,
+  // suspended, and rejected are all blocked here (server-side, not merely
+  // by hiding UI), matching the same status check requireDealerRole
+  // enforces on every write. /dealer/pending explains why and shows
+  // nothing else.
+  if (dealership.status !== "approved") redirect("/dealer/pending");
+
   return { userId, role: memberships[0].role, dealership };
+}
+
+/**
+ * Same membership lookup as requireDealerContext but for /dealer/pending
+ * itself: it must NOT redirect a non-approved dealership back to
+ * /dealer/pending (that would be the page calling itself), and it should
+ * send an already-approved dealership on to the real dashboard instead of
+ * displaying a stale pending/suspended message.
+ */
+export async function getDealerStatusContext() {
+  const userId = await authGetUserId();
+  if (!userId) redirect("/dealer/login");
+
+  const memberships = await getUserDealerships();
+  if (memberships.length === 0) redirect("/dealer/apply");
+
+  const [dealership] = await db
+    .select()
+    .from(dealerships)
+    .where(eq(dealerships.id, memberships[0].dealershipId))
+    .limit(1);
+  if (!dealership) redirect("/dealer/apply");
+  if (dealership.status === "approved") redirect("/dealer");
+
+  return { userId, dealership };
 }

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { inventory, inventoryFeatures, inventoryPriceHistory } from "@/server/db/schema";
 import { requireDealerRole } from "@/server/auth/guards";
+import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { csvRowSchema } from "@/server/validation/inventory";
 import { logAudit } from "@/server/audit/log";
 import { revalidatePath } from "next/cache";
@@ -29,7 +30,7 @@ export async function importInventoryCsv(
   dealershipId: string,
   formData: FormData,
 ): Promise<CsvImportReport> {
-  await requireDealerRole(dealershipId);
+  await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {

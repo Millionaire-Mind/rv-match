@@ -72,4 +72,20 @@ export const leadStatusLabels: Record<(typeof leadStatusValues)[number], string>
   lost: "Lost",
 };
 
-export const dealerRoleSchema = z.enum(["owner", "staff"]);
+export const dealerRoleValues = ["owner", "sales_manager", "salesperson", "marketing"] as const;
+export const dealerRoleSchema = z.enum(dealerRoleValues);
+export type DealerRole = (typeof dealerRoleValues)[number];
+
+export const dealerRoleLabels: Record<DealerRole, string> = {
+  owner: "Owner / Admin",
+  sales_manager: "Sales Manager",
+  salesperson: "Salesperson",
+  marketing: "Marketing User",
+};
+
+export const dealerRoleDescriptions: Record<DealerRole, string> = {
+  owner: "Full access: dealership configuration, team management, all inventory, leads, sales, analytics, and pilot.",
+  sales_manager: "Leads, salespeople and assignments, pipeline, sales, inventory visibility, and analytics.",
+  salesperson: "Assigned leads, customer context, appointments, lead status/notes, and the sold workflow.",
+  marketing: "Campaigns, distribution, and inventory-marketing analytics. No lead or customer/sale administration.",
+};

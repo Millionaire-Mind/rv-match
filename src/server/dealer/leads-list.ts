@@ -21,11 +21,12 @@ export async function getDealerLeads(dealershipId: string, status?: string) {
   return rows;
 }
 
+/** Active team members only — used for the lead-assignment dropdown; deactivated members shouldn't receive new assignments. */
 export async function getDealerTeam(dealershipId: string) {
   const rows = await db
     .select({ userId: dealershipUsers.userId, fullName: profiles.fullName, email: profiles.email })
     .from(dealershipUsers)
     .innerJoin(profiles, eq(dealershipUsers.userId, profiles.id))
-    .where(eq(dealershipUsers.dealershipId, dealershipId));
+    .where(and(eq(dealershipUsers.dealershipId, dealershipId), eq(dealershipUsers.active, true)));
   return rows;
 }

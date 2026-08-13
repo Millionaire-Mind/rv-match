@@ -3,8 +3,10 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { dealershipUsers, inventory, inventoryVideos, profiles, videoGenerationJobs } from "@/server/db/schema";
+import { dealershipUsers, dealerships, inventory, inventoryVideos, profiles, videoGenerationJobs } from "@/server/db/schema";
 import { authGetUserId } from "./provider";
+import { ALL_DEALER_ROLES } from "@/server/dealer/permissions";
+import type { DealerRole } from "@/server/validation/enums";
 
 export class ForbiddenError extends Error {
   constructor(message = "You do not have access to this resource.") {
@@ -28,17 +30,28 @@ export async function requireUser(): Promise<string> {
 }
 
 /**
- * Throws unless the current user is a member of `dealershipId`. This is the
- * primary tenant-isolation check — every dealer server action calls this
- * with the dealership id extracted from the record being touched (never
- * trusted from a client-supplied "current dealership" value alone), so a
- * dealer cannot read/write another dealership's data by manipulating an id
- * in a request.
+ * Throws unless the current user is an active member of `dealershipId` in
+ * one of `allowedRoles`, AND the dealership itself is currently approved.
+ * This is the primary tenant-isolation + authorization check — every dealer
+ * server action calls this with the dealership id extracted from the
+ * record being touched (never trusted from a client-supplied "current
+ * dealership" value alone), so a dealer cannot read/write another
+ * dealership's data by manipulating an id in a request, a deactivated team
+ * member can't act on a dealership that removed them, and a pending/
+ * suspended/rejected dealership can't operate even if someone still holds
+ * a valid session from before that status change - the original prompt
+ * requires this to be enforced server-side, not merely hidden by the UI.
+ *
+ * Platform admins bypass both the role and dealership-status checks
+ * (support/operational access), matching requireAdmin's own trust level;
+ * unlike requireDealerContext, this does not route them into the dealer
+ * dashboard - it only lets an already-admin-authorized caller act on a
+ * specific dealership's data by id, the same as any other admin tool.
  */
 export async function requireDealerRole(
   dealershipId: string,
-  allowedRoles: Array<"owner" | "staff"> = ["owner", "staff"],
-): Promise<{ userId: string; role: "owner" | "staff" }> {
+  allowedRoles: readonly DealerRole[] = ALL_DEALER_ROLES,
+): Promise<{ userId: string; role: DealerRole }> {
   const userId = await requireUser();
 
   const [profile] = await db
@@ -51,13 +64,21 @@ export async function requireDealerRole(
   }
 
   const [membership] = await db
-    .select({ role: dealershipUsers.role })
+    .select({
+      role: dealershipUsers.role,
+      active: dealershipUsers.active,
+      dealershipStatus: dealerships.status,
+    })
     .from(dealershipUsers)
+    .innerJoin(dealerships, eq(dealerships.id, dealershipUsers.dealershipId))
     .where(and(eq(dealershipUsers.dealershipId, dealershipId), eq(dealershipUsers.userId, userId)))
     .limit(1);
 
-  if (!membership || !allowedRoles.includes(membership.role)) {
+  if (!membership || !membership.active || !allowedRoles.includes(membership.role)) {
     throw new ForbiddenError("You do not have access to this dealership.");
+  }
+  if (membership.dealershipStatus !== "approved") {
+    throw new ForbiddenError("This dealership is not currently approved to operate on RV Match.");
   }
 
   return { userId, role: membership.role };
@@ -129,16 +150,14 @@ export async function requireVideoBelongsToInventory(inventoryId: string, videoI
   }
 }
 
-/** Returns the dealership ids the current user belongs to (for dashboard nav). */
-export async function getUserDealerships(): Promise<
-  Array<{ dealershipId: string; role: "owner" | "staff" }>
-> {
+/** Returns the dealership ids the current user actively belongs to (for dashboard nav). Deactivated memberships are excluded. */
+export async function getUserDealerships(): Promise<Array<{ dealershipId: string; role: DealerRole }>> {
   const userId = await authGetUserId();
   if (!userId) return [];
   const rows = await db
     .select({ dealershipId: dealershipUsers.dealershipId, role: dealershipUsers.role })
     .from(dealershipUsers)
-    .where(eq(dealershipUsers.userId, userId));
+    .where(and(eq(dealershipUsers.userId, userId), eq(dealershipUsers.active, true)));
   return rows;
 }
 

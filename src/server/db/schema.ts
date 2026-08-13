@@ -17,7 +17,7 @@ import { relations, sql } from "drizzle-orm";
 // ---------------------------------------------------------------------------
 
 export const platformRoleEnum = pgEnum("platform_role", ["consumer", "platform_admin"]);
-export const dealerRoleEnum = pgEnum("dealer_role", ["owner", "staff"]);
+export const dealerRoleEnum = pgEnum("dealer_role", ["owner", "sales_manager", "salesperson", "marketing"]);
 export const dealershipStatusEnum = pgEnum("dealership_status", [
   "pending",
   "approved",
@@ -172,7 +172,9 @@ export const dealershipUsers = pgTable("dealership_users", {
   userId: uuid("user_id")
     .notNull()
     .references(() => profiles.id, { onDelete: "cascade" }),
-  role: dealerRoleEnum("role").notNull().default("staff"),
+  role: dealerRoleEnum("role").notNull().default("salesperson"),
+  active: boolean("active").notNull().default(true),
+  invitedBy: uuid("invited_by").references(() => profiles.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

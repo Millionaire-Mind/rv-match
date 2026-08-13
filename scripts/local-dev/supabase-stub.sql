@@ -28,3 +28,10 @@ language sql stable
 as $$
   select nullif(current_setting('rvmatch.current_user_id', true), '')::uuid
 $$;
+
+-- Role stand-ins (anon/authenticated/service_role) and their baseline grants
+-- live in supabase/migrations/20260101000009_fix_profiles_privilege_escalation.sql,
+-- not here: that migration is written to be a safe no-op against a real
+-- Supabase project (those roles already exist there with these grants), so
+-- it can run identically against local Postgres and Supabase rather than
+-- needing separate local-only stubbing.

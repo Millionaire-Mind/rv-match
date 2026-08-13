@@ -52,7 +52,7 @@ export default async function DealerDashboardLayout({ children }: { children: Re
         <Link href="/dealer" className="mb-6 text-lg font-semibold">
           {brand.name} <span className="text-muted-foreground font-normal">Dealer</span>
         </Link>
-        <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+        <nav className="flex min-w-0 gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
           {nav.map((item) => (
             <Link
               key={item.href}

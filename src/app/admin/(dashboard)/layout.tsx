@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin" className="mb-6 text-lg font-semibold">
           {brand.name} <span className="text-white/50 font-normal">Admin</span>
         </Link>
-        <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+        <nav className="flex min-w-0 gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
           {nav.map((item) => (
             <Link
               key={item.href}

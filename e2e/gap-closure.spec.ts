@@ -329,3 +329,31 @@ test.describe("Gap 4B: individual-RV QR reaction experience", () => {
     await db.delete(dealerships).where(eq(dealerships.id, dealership.id));
   });
 });
+
+const DEMO_PASSWORD = "RvMatchDemo123!";
+
+test.describe("Gap 5: dealer analytics charts", () => {
+  test("the Analytics page renders real trend and campaign-contribution charts, not just cards/tables", async ({
+    page,
+  }) => {
+    await page.goto("/dealer/login");
+    await page.getByLabel("Email").fill("owner@rockymountainrv.example");
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL(/\/dealer$/, { timeout: 15000 });
+
+    await page.goto("/dealer/analytics");
+    await expect(page.getByRole("heading", { name: "Analytics" })).toBeVisible();
+
+    // The four trend sparklines (Impressions/Engagement/Leads/Verified
+    // Sales) are real inline SVGs, not table cells.
+    const trendCharts = page.locator('svg[role="img"]');
+    await expect(trendCharts).toHaveCount(4);
+    await expect(trendCharts.first()).toHaveAccessibleName(/Impressions trend/);
+    await expect(page.getByText("Verified Sales", { exact: true }).first()).toBeVisible();
+
+    // The per-RV table now has rate columns, not just raw counts.
+    await expect(page.getByRole("columnheader", { name: "LOVE Rate" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Unique Viewers" })).toBeVisible();
+  });
+});

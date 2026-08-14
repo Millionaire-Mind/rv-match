@@ -107,8 +107,15 @@ beforeAll(async () => {
   await trackEvent({ consumerProfileId, eventType: "video_started", inventoryId: popularRvId, dealershipId });
   await trackEvent({ consumerProfileId, eventType: "video_started", inventoryId: popularRvId, dealershipId });
   await trackEvent({ consumerProfileId, eventType: "video_started", inventoryId: popularRvId, dealershipId });
+  await trackEvent({
+    consumerProfileId,
+    eventType: "video_complete",
+    inventoryId: popularRvId,
+    dealershipId,
+    metadata: { secondsWatched: 20, percentWatched: 100 },
+  });
   await trackEvent({ consumerProfileId, eventType: "video_complete", inventoryId: popularRvId, dealershipId });
-  await trackEvent({ consumerProfileId, eventType: "video_complete", inventoryId: popularRvId, dealershipId });
+  await trackEvent({ consumerProfileId, eventType: "detail_view", inventoryId: popularRvId, dealershipId });
 
   await db.insert(swipeDecisions).values({ consumerProfileId, inventoryId: popularRvId, decision: "love" });
   await db.insert(savedInventory).values({ consumerProfileId, inventoryId: popularRvId });
@@ -161,17 +168,52 @@ describe("getPerRvAnalytics", () => {
     expect(popular.leadsCount).toBe(1);
     expect(popular.verifiedSales).toBe(1);
 
+    // Gap 5: unique viewers, average watch time, and rate metrics.
+    expect(popular.uniqueViewers).toBe(1);
+    expect(popular.avgWatchSeconds).toBeCloseTo(20, 5);
+    expect(popular.detailViews).toBe(1);
+    expect(popular.detailViewRate).toBeCloseTo(1 / 3, 5);
+    // Only one swipe decision total (love) on the popular RV - a 100% LOVE rate.
+    expect(popular.loveRate).toBeCloseTo(1, 5);
+    expect(popular.saveRate).toBeCloseTo(1 / 3, 5);
+    expect(popular.leadRate).toBeCloseTo(1 / 3, 5);
+    expect(popular.salesConversionRate).toBeCloseTo(1, 5);
+
     expect(quiet.impressions).toBe(0);
     expect(quiet.completionRate).toBeNull();
     expect(quiet.passes).toBe(1);
     expect(quiet.loves).toBe(0);
     expect(quiet.leadsCount).toBe(0);
     expect(quiet.verifiedSales).toBe(0);
+    expect(quiet.uniqueViewers).toBe(0);
+    expect(quiet.avgWatchSeconds).toBeNull();
+    // A 100% PASS rate on its only decision, but below the minimum
+    // impression volume for an insight to be shown.
+    expect(quiet.passRate).toBeCloseTo(1, 5);
+    expect(quiet.insight).toBeNull();
+  });
+
+  it("only surfaces a deterministic insight once a row has enough volume to mean anything", async () => {
+    const rows = await getPerRvAnalytics(dealershipId, 0);
+    const popular = rows.find((r) => r.inventoryId === popularRvId)!;
+    // 3 impressions is below MIN_IMPRESSIONS_FOR_INSIGHT (10) - no insight
+    // should be fabricated from a tiny sample even though its rates are extreme.
+    expect(popular.insight).toBeNull();
   });
 
   it("returns every RV in the dealership even with zero activity", async () => {
     const rows = await getPerRvAnalytics(dealershipId, 0);
     expect(rows.map((r) => r.inventoryId).sort()).toEqual([popularRvId, quietRvId].sort());
+  });
+
+  it("works with a bounded date window, not only the all-time (sinceDays=0) case", async () => {
+    // sinceDays=0 skips the date-filtered branch of the watch-time query
+    // entirely - this exercises it for real (a real bug here previously
+    // crashed the whole Analytics page whenever a date range was applied).
+    const rows = await getPerRvAnalytics(dealershipId, 30);
+    const popular = rows.find((r) => r.inventoryId === popularRvId)!;
+    expect(popular.impressions).toBe(3);
+    expect(popular.avgWatchSeconds).toBeCloseTo(20, 5);
   });
 
   it("rejects a salesperson - dashboard/analytics viewing is restricted to owner/sales_manager/marketing", async () => {

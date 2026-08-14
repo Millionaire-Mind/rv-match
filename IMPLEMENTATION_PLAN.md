@@ -168,10 +168,15 @@ queries, real auth, real tests, nothing stubbed to look built.
 - [x] Phase 30-32 — Expanded test coverage (a new Playwright spec covering
       traditional search, notifications, account privacy, and partner
       matching - the four largest correction-pass features that had zero e2e
-      coverage), a real clean-setup validation pass, and this documentation
-      correction. Writing that coverage surfaced one real defect: the cookie
-      notice banner could overlap and block clicks on page controls near the
-      bottom of the viewport for a first-time visitor (fixed in
+      coverage), a real clean-setup validation pass (fresh `npm ci`; all 20
+      migrations applied to an empty database; `npm run db:seed` against it,
+      including real FFmpeg video generation for all 52 seed videos; both
+      the video-worker and feed-worker scripts starting and exiting cleanly
+      against that fresh database - all actually run, not assumed), and this
+      documentation correction. Writing the new e2e coverage surfaced one
+      real defect: the cookie notice banner could overlap and block clicks
+      on page controls near the bottom of the viewport for a first-time
+      visitor (fixed in
       `cookie-notice.tsx` - see TESTING.md)
 
 See README.md for how to run everything and "Known limitations" for what's

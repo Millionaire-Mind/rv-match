@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, PlayCircle } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { RvVideoThumb } from "@/components/rv/rv-video-thumb";
 import { JoinPartnerButton } from "@/components/partner/join-partner-button";
 import { PartnerWaitingPanel } from "@/components/partner/partner-waiting-panel";
 import { getPartnerLinkView } from "@/server/partner/actions";
@@ -140,20 +141,12 @@ export default async function PartnerPage({ params }: PartnerPageProps) {
               href={`/rv/${card.id}`}
               className="group overflow-hidden rounded-xl border border-border bg-card transition hover:border-accent"
             >
-              <div className="relative aspect-video bg-secondary">
-                {card.photoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={card.photoUrl} alt="" className="h-full w-full object-cover" />
-                )}
-                {card.videoUrl && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
-                    <PlayCircle className="h-12 w-12 text-white drop-shadow" strokeWidth={1.5} />
-                  </div>
-                )}
-                <Badge variant="accent" className="absolute left-2 top-2">
-                  {card.sharedFitScore}% Shared Match
-                </Badge>
-              </div>
+              <RvVideoThumb
+                videoUrl={card.videoUrl}
+                photoUrl={card.photoUrl}
+                alt={`${card.year} ${card.make} ${card.model}`}
+                badges={<Badge variant="accent">{card.sharedFitScore}% Shared Match</Badge>}
+              />
               <div className="p-3">
                 <p className="font-medium leading-tight">
                   {card.year} {card.make} {card.model}

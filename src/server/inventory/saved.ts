@@ -1,7 +1,7 @@
 import { desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { dealerships, inventory, inventoryPhotos, savedInventory } from "@/server/db/schema";
+import { dealerships, inventory, inventoryPhotos, inventoryVideos, savedInventory } from "@/server/db/schema";
 import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { scoreOneInventory } from "@/server/recommendation/engine";
 import { getRecentPriceDrops, type PriceDropInfo } from "@/server/inventory/price-history";
@@ -15,7 +15,7 @@ export interface SavedCardData {
   priceCents: number;
   status: "draft" | "published" | "sold" | "archived";
   photoUrl: string | null;
-  hasVideo: boolean;
+  videoUrl: string | null;
   dealerName: string;
   fitScore: number | null;
   savedAt: Date;
@@ -38,9 +38,10 @@ export async function getSavedInventory(): Promise<SavedCardData[]> {
   if (rows.length === 0) return [];
 
   const invIds = rows.map((r) => r.inventoryId);
-  const [invRows, photoRows] = await Promise.all([
+  const [invRows, photoRows, videoRows] = await Promise.all([
     db.select().from(inventory).where(inArray(inventory.id, invIds)),
     db.select().from(inventoryPhotos).where(inArray(inventoryPhotos.inventoryId, invIds)),
+    db.select().from(inventoryVideos).where(inArray(inventoryVideos.inventoryId, invIds)),
   ]);
   const dealerIds = [...new Set(invRows.map((r) => r.dealershipId))];
   const dealerRows = dealerIds.length
@@ -60,6 +61,8 @@ export async function getSavedInventory(): Promise<SavedCardData[]> {
     const rv = invMap.get(row.inventoryId);
     if (!rv) continue;
     const match = await scoreOneInventory(consumerProfileId, rv);
+    const primaryVideo =
+      videoRows.find((v) => v.id === rv.primaryVideoId) ?? videoRows.find((v) => v.inventoryId === rv.id);
     results.push({
       savedId: row.savedId,
       inventoryId: rv.id,
@@ -69,7 +72,7 @@ export async function getSavedInventory(): Promise<SavedCardData[]> {
       priceCents: rv.advertisedPriceCents ?? rv.salePriceCents,
       status: rv.status,
       photoUrl: photoByInv.get(rv.id) ?? null,
-      hasVideo: Boolean(rv.primaryVideoId),
+      videoUrl: primaryVideo?.url ?? null,
       dealerName: dealerMap.get(rv.dealershipId) ?? "RV Dealer",
       fitScore: match.fitScore,
       savedAt: row.savedAt,

@@ -85,6 +85,8 @@ export const DiscoveryCard = forwardRef<DiscoveryCardHandle, DiscoveryCardProps>
       className="absolute inset-0 touch-none select-none overflow-hidden rounded-2xl shadow-2xl"
       style={{ zIndex: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
       aria-label={`${card.year} ${card.make} ${card.model}`}
+      data-inventory-id={active ? card.id : undefined}
+      data-active={active || undefined}
     >
       <VideoPlayer
         src={card.videoUrl}

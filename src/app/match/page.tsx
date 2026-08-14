@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, PlayCircle } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { RvVideoThumb } from "@/components/rv/rv-video-thumb";
 import { RadiusSelect } from "@/components/match/radius-select";
 import { LocationPromptInline } from "@/components/discovery/location-prompt-inline";
 import { PartnerInviteButton } from "@/components/partner/partner-invite-button";
@@ -130,23 +131,12 @@ export default async function MatchPage() {
                 href={`/rv/${card.id}`}
                 className="group overflow-hidden rounded-xl border border-border bg-card transition hover:border-accent"
               >
-                <div className="relative aspect-video bg-secondary">
-                  {card.photos[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={card.photos[0]} alt="" className="h-full w-full object-cover" />
-                  )}
-                  {/* Every match is video-eligible (see discoveryEligible()) - this
-                      is a static preview frame, not a substitute for the real
-                      video, which plays on the RV detail page this card links to. */}
-                  {card.videoUrl && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
-                      <PlayCircle className="h-12 w-12 text-white drop-shadow" strokeWidth={1.5} />
-                    </div>
-                  )}
-                  <Badge variant="accent" className="absolute left-2 top-2">
-                    {card.fitScore}% Match
-                  </Badge>
-                </div>
+                <RvVideoThumb
+                  videoUrl={card.videoUrl}
+                  photoUrl={card.photos[0] ?? null}
+                  alt={`${card.year} ${card.make} ${card.model}`}
+                  badges={<Badge variant="accent">{card.fitScore}% Match</Badge>}
+                />
                 <div className="p-3">
                   <p className="font-medium leading-tight">
                     {card.year} {card.make} {card.model}

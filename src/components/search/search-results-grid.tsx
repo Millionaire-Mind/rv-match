@@ -1,16 +1,15 @@
 import Link from "next/link";
-import { PlayCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { RvVideoThumb } from "@/components/rv/rv-video-thumb";
 import { formatCurrency, formatDistance } from "@/lib/utils";
 import type { SearchResultCard } from "@/server/search/query";
 
 /**
  * Every result here is discoveryEligible() (see searchInventory) - video-first
  * is enforced for traditional search results too, not just the swipe feed and
- * Match. This grid intentionally mirrors the Match/Saved card convention
- * (photo + PlayCircle overlay, no autoplay) rather than becoming a generic
- * static listing grid.
+ * Match, via the shared RvVideoThumb tile (vertical, autoplays muted when
+ * scrolled into view) rather than a static landscape photo grid.
  */
 export function SearchResultsGrid({ results }: { results: SearchResultCard[] }) {
   if (results.length === 0) {
@@ -30,20 +29,16 @@ export function SearchResultsGrid({ results }: { results: SearchResultCard[] }) 
           href={`/rv/${rv.id}`}
           className="group overflow-hidden rounded-xl border border-border bg-card transition hover:border-accent"
         >
-          <div className="relative aspect-video bg-secondary">
-            {rv.photoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={rv.photoUrl} alt="" className="h-full w-full object-cover" />
-            )}
-            {rv.videoUrl && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
-                <PlayCircle className="h-12 w-12 text-white drop-shadow" strokeWidth={1.5} />
-              </div>
-            )}
-            <Badge variant={rv.condition === "new" ? "accent" : "secondary"} className="absolute left-2 top-2">
-              {rv.condition === "new" ? "New" : "Used"}
-            </Badge>
-          </div>
+          <RvVideoThumb
+            videoUrl={rv.videoUrl}
+            photoUrl={rv.photoUrl}
+            alt={`${rv.year} ${rv.make} ${rv.model}`}
+            badges={
+              <Badge variant={rv.condition === "new" ? "accent" : "secondary"}>
+                {rv.condition === "new" ? "New" : "Used"}
+              </Badge>
+            }
+          />
           <div className="p-3">
             <p className="font-medium leading-tight">
               {rv.year} {rv.make} {rv.model}

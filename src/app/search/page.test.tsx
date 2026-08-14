@@ -28,9 +28,11 @@ vi.mock("next/headers", () => ({
 }));
 
 const { default: SearchPage } = await import("./page");
+const { getOrCreateConsumerProfileId } = await import("@/server/auth/anonymous");
 
 let dealershipId: string;
 let anonymousSessionId: string;
+let consumerProfileId: string;
 
 beforeAll(async () => {
   const suffix = Date.now();
@@ -49,6 +51,11 @@ beforeAll(async () => {
   const [session] = await db.insert(anonymousSessions).values({}).returning({ id: anonymousSessions.id });
   anonymousSessionId = session.id;
   currentToken = anonymousSessionId;
+  // Scoping event queries below to this test's own consumer profile - not
+  // "the whole behavioral_events table" - keeps this test correct
+  // regardless of leftover rows from concurrently or previously run e2e
+  // suites against the same shared dev database.
+  consumerProfileId = await getOrCreateConsumerProfileId();
 
   const [rv] = await db
     .insert(inventory)
@@ -78,11 +85,18 @@ afterAll(async () => {
   await db.delete(dealerships).where(eq(dealerships.id, dealershipId));
 });
 
-async function countSearchEvents() {
-  const rows = await db
+async function searchEventsForThisProfile() {
+  return db
     .select()
     .from(behavioralEvents)
-    .where(and(eq(behavioralEvents.eventType, "search_performed")));
+    .where(
+      and(eq(behavioralEvents.eventType, "search_performed"), eq(behavioralEvents.consumerProfileId, consumerProfileId)),
+    )
+    .orderBy(behavioralEvents.createdAt);
+}
+
+async function countSearchEvents() {
+  const rows = await searchEventsForThisProfile();
   return rows.length;
 }
 
@@ -92,10 +106,7 @@ describe("SearchPage", () => {
 
     await SearchPage({ searchParams: Promise.resolve({ rvType: "fifth_wheel", dealershipId }) });
 
-    const rows = await db
-      .select()
-      .from(behavioralEvents)
-      .where(and(eq(behavioralEvents.eventType, "search_performed")));
+    const rows = await searchEventsForThisProfile();
     expect(rows.length).toBe(before + 1);
 
     const latest = rows[rows.length - 1];

@@ -1,4 +1,15 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { eq } from "drizzle-orm";
+
+import { db } from "../src/server/db/client";
+import {
+  consumerPreferences,
+  consumerProfiles,
+  dealerships,
+  inventory,
+  inventoryVideos,
+  swipeDecisions,
+} from "../src/server/db/schema";
 
 /**
  * Playwright coverage added for the targeted gap-closure pass. Each
@@ -110,5 +121,151 @@ test.describe("Gap 2: video-first consumer surfaces", () => {
     await page.waitForURL(/\/match/, { timeout: 15000 });
 
     await assertRealPlayableVideo(page);
+  });
+});
+
+async function getConsumerProfileId(context: BrowserContext): Promise<string> {
+  const cookies = await context.cookies();
+  const sessionCookie = cookies.find((c) => c.name === "rvm_session");
+  if (!sessionCookie) throw new Error("rvm_session cookie not found - visit a page in this context first");
+  const [profile] = await db
+    .select({ id: consumerProfiles.id })
+    .from(consumerProfiles)
+    .where(eq(consumerProfiles.anonymousSessionId, sessionCookie.value));
+  if (!profile) throw new Error("no consumer_profiles row for this anonymous session yet");
+  return profile.id;
+}
+
+async function reachMatchViaRealSwipes(page: Page) {
+  await page.goto("/discover");
+  await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+  await swipeTimes(page, 10, "ArrowRight");
+  const zipDialog = page.getByRole("dialog");
+  if (await zipDialog.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await zipDialog.getByRole("textbox", { name: "ZIP code" }).fill("80202");
+    await zipDialog.getByRole("button", { name: "Save" }).click();
+    await expect(zipDialog).not.toBeVisible({ timeout: 5000 });
+  }
+  await swipeTimes(page, 10, "ArrowRight");
+}
+
+test.describe("Gap 3: partner shared match intelligence", () => {
+  test("both-loved, both-liked, disagreement, and shared preference profile all render from real independent swipe/preference data", async ({
+    context,
+  }) => {
+    const owner = await context.newPage();
+    await reachMatchViaRealSwipes(owner);
+    await owner.waitForURL(/\/match/, { timeout: 15000 });
+
+    await owner.getByRole("button", { name: "Compare With My Partner" }).click();
+    await owner.waitForURL(/\/partner\//, { timeout: 10000 });
+    const inviteUrl = owner.url();
+
+    const partnerContext = await context.browser()!.newContext();
+    const partner = await partnerContext.newPage();
+    await partner.goto(inviteUrl);
+    await expect(partner.getByRole("heading", { name: "You've been invited to compare RV matches" })).toBeVisible({
+      timeout: 10000,
+    });
+    await partner.getByRole("button", { name: "Start Matching Together" }).click();
+    await partner.waitForURL(/\/discover/, { timeout: 15000 });
+
+    // The partner does their own real, independent 20 swipes too - proving
+    // the join + independent-history mechanism still works end to end,
+    // not just that the comparison math works in isolation.
+    await reachMatchViaRealSwipes(partner);
+
+    // Two genuinely independent 20-card random walks aren't guaranteed to
+    // overlap on any specific RV, so - to deterministically prove the
+    // "both loved" / "both liked" / "disagreed" buckets and the shared
+    // preference summary actually render real data - seed a small,
+    // controlled set of additional swipe/preference rows directly against
+    // both partners' real consumer profiles (resolved from their actual
+    // anonymous session cookies), the same direct-DB-access pattern
+    // security.spec.ts already uses. Every row inserted here still flows
+    // through the real getPartnerDecisionComparison/getSharedPreferenceProfile
+    // code paths when the page renders - nothing is asserted directly
+    // against the database.
+    const ownerProfileId = await getConsumerProfileId(context);
+    const partnerProfileId = await getConsumerProfileId(partnerContext);
+
+    const suffix = Date.now();
+    const [dealership] = await db
+      .insert(dealerships)
+      .values({
+        name: "__test_gap3_partner__",
+        slug: `__test-gap3-partner-${suffix}`,
+        primaryContactName: "Test",
+        primaryContactEmail: `gap3-partner-${suffix}@example.com`,
+        status: "approved",
+      })
+      .returning({ id: dealerships.id });
+
+    async function makeRv(tag: string) {
+      const [rv] = await db
+        .insert(inventory)
+        .values({
+          dealershipId: dealership.id,
+          stockNumber: `GAP3-${tag}-${suffix}`,
+          year: 2024,
+          make: "Forest River",
+          model: "Rockwood",
+          rvType: "travel_trailer",
+          condition: "new",
+          salePriceCents: 3500000,
+          status: "published",
+          source: "manual",
+        })
+        .returning({ id: inventory.id });
+      const [video] = await db
+        .insert(inventoryVideos)
+        .values({ inventoryId: rv.id, url: `/media/videos/gap3-${tag}.mp4`, source: "dealer_upload" })
+        .returning({ id: inventoryVideos.id });
+      await db.update(inventory).set({ primaryVideoId: video.id }).where(eq(inventory.id, rv.id));
+      return rv.id;
+    }
+
+    const rvBothLove = await makeRv("both-love");
+    const rvBothLike = await makeRv("both-like");
+    const rvDisagree = await makeRv("disagree");
+
+    await db.insert(swipeDecisions).values([
+      { consumerProfileId: ownerProfileId, inventoryId: rvBothLove, decision: "love" },
+      { consumerProfileId: partnerProfileId, inventoryId: rvBothLove, decision: "love" },
+      { consumerProfileId: ownerProfileId, inventoryId: rvBothLike, decision: "like" },
+      { consumerProfileId: partnerProfileId, inventoryId: rvBothLike, decision: "more_like_this" },
+      { consumerProfileId: ownerProfileId, inventoryId: rvDisagree, decision: "love" },
+      { consumerProfileId: partnerProfileId, inventoryId: rvDisagree, decision: "pass" },
+    ]);
+    // upsert, not insert: both partners already did 20 real swipes above,
+    // which may have already written a real rv_type preference row (most
+    // of the seed catalog is travel_trailer) - this must still guarantee
+    // a confident, matching, positive signal for both regardless.
+    for (const consumerProfileId of [ownerProfileId, partnerProfileId]) {
+      await db
+        .insert(consumerPreferences)
+        .values({ consumerProfileId, attribute: "rv_type", value: "travel_trailer", score: "3", observations: 6 })
+        .onConflictDoUpdate({
+          target: [consumerPreferences.consumerProfileId, consumerPreferences.attribute, consumerPreferences.value],
+          set: { score: "3", observations: 6 },
+        });
+    }
+
+    await owner.goto(inviteUrl);
+    await expect(owner.getByRole("heading", { name: "Your Shared RV Match" })).toBeVisible({ timeout: 10000 });
+
+    await expect(owner.getByText(/You matched on \d+ of \d+ major preferences\./)).toBeVisible();
+    await expect(owner.getByRole("heading", { name: "You Both Loved" })).toBeVisible();
+    await expect(owner.getByRole("heading", { name: "You Both Liked" })).toBeVisible();
+    await expect(owner.getByRole("heading", { name: "Where You Saw It Differently" })).toBeVisible();
+
+    // The partner's own view of the same link must show the same buckets
+    // (their perspective, not just the owner's).
+    await partner.goto(inviteUrl);
+    await expect(partner.getByRole("heading", { name: "Your Shared RV Match" })).toBeVisible({ timeout: 10000 });
+    await expect(partner.getByRole("heading", { name: "You Both Loved" })).toBeVisible();
+
+    await db.delete(dealerships).where(eq(dealerships.id, dealership.id));
+    await partnerContext.close();
   });
 });

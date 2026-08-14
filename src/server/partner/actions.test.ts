@@ -151,5 +151,46 @@ describe("getPartnerLinkView", () => {
     const view = await getPartnerLinkView(`nonexistent-${suffix}`);
     expect(view).toBeNull();
   });
+
+  it("captures 'partner' as first-touch attribution for a brand-new invitee, but never overwrites the owner's own prior attribution", async () => {
+    const owner = await newSession();
+    currentToken = owner.anonymousSessionId;
+    const { token } = await createOrGetPartnerInviteLink();
+
+    const [ownerSessionBefore] = await db
+      .select()
+      .from(anonymousSessions)
+      .where(eq(anonymousSessions.id, owner.anonymousSessionId));
+    expect(ownerSessionBefore.firstSource).toBe("direct"); // set by newSession's plain insert, unaffected
+
+    // A brand-new visitor with no anonymous_sessions row yet at all -
+    // getPartnerLinkView itself has to create it via getOrCreateConsumerProfileId.
+    const freshSessionId = crypto.randomUUID();
+    currentToken = freshSessionId;
+    anonymousSessionIds.push(freshSessionId);
+    const invieweeView = await getPartnerLinkView(token);
+    expect(invieweeView!.viewerRole).toBe("invitee");
+    if (invieweeView) consumerProfileIds.push((await getOrCreateProfileIdForCleanup(freshSessionId))!);
+
+    const [freshSession] = await db.select().from(anonymousSessions).where(eq(anonymousSessions.id, freshSessionId));
+    expect(freshSession.firstSource).toBe("partner");
+
+    // Re-fetching the owner's own link doesn't retroactively relabel them.
+    currentToken = owner.anonymousSessionId;
+    await getPartnerLinkView(token);
+    const [ownerSessionAfter] = await db
+      .select()
+      .from(anonymousSessions)
+      .where(eq(anonymousSessions.id, owner.anonymousSessionId));
+    expect(ownerSessionAfter.firstSource).toBe("direct");
+  });
 });
+
+async function getOrCreateProfileIdForCleanup(anonymousSessionId: string): Promise<string | undefined> {
+  const [row] = await db
+    .select({ id: consumerProfiles.id })
+    .from(consumerProfiles)
+    .where(eq(consumerProfiles.anonymousSessionId, anonymousSessionId));
+  return row?.id;
+}
 

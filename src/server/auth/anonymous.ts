@@ -57,7 +57,10 @@ export async function getOrCreateAnonymousSessionId(attribution?: {
  * (merged) by attaching `user_id` to it rather than creating a second
  * identity — all prior swipes/saves/preferences carry forward.
  */
-export async function getOrCreateConsumerProfileId(): Promise<string> {
+export async function getOrCreateConsumerProfileId(attribution?: {
+  firstSource: string;
+  firstCampaignId?: string;
+}): Promise<string> {
   const userId = await authGetUserId();
 
   if (userId) {
@@ -105,7 +108,7 @@ export async function getOrCreateConsumerProfileId(): Promise<string> {
     return created.id;
   }
 
-  const anonymousSessionId = await getOrCreateAnonymousSessionId();
+  const anonymousSessionId = await getOrCreateAnonymousSessionId(attribution);
   // Same race as above, keyed on anonymous_session_id instead.
   const [row] = await db
     .insert(consumerProfiles)

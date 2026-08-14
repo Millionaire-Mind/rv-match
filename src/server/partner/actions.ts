@@ -56,7 +56,11 @@ export async function getPartnerLinkView(token: string): Promise<PartnerLinkView
   const [link] = await db.select().from(partnerLinks).where(eq(partnerLinks.token, token)).limit(1);
   if (!link) return null;
 
-  const consumerProfileId = await getOrCreateConsumerProfileId();
+  // Only takes effect if this viewer has no anonymous session yet (see
+  // getOrCreateAnonymousSessionId's doc comment) - so this safely captures
+  // "arrived via a partner invite" for a first-time invitee without ever
+  // overwriting the owner's own (earlier, unrelated) first-touch source.
+  const consumerProfileId = await getOrCreateConsumerProfileId({ firstSource: "partner" });
   const viewerRole = await resolveViewerRole(link, consumerProfileId);
   const isParty = viewerRole === "owner" || viewerRole === "partner";
 

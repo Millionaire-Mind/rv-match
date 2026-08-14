@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { LayoutDashboard, Settings, ShieldCheck, Sparkles, Store } from "lucide-react";
+import {
+  BarChart3,
+  Film,
+  Inbox,
+  LayoutDashboard,
+  Package,
+  QrCode,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Store,
+  Users,
+  UsersRound,
+} from "lucide-react";
 
 import { requireAdminContext } from "@/server/admin/context";
 import { brand } from "@/config/brand";
@@ -12,8 +25,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const nav = [
     { href: "/admin", label: "Overview", icon: LayoutDashboard },
     { href: "/admin/dealers", label: "Dealers", icon: Store },
+    { href: "/admin/users", label: "Users", icon: Users },
+    { href: "/admin/consumers", label: "Consumers", icon: UsersRound },
+    { href: "/admin/inventory", label: "Inventory", icon: Package },
+    { href: "/admin/videos", label: "Video Jobs", icon: Film },
+    { href: "/admin/leads", label: "Leads", icon: Inbox },
     { href: "/admin/sales", label: "Sale Verification", icon: ShieldCheck },
+    { href: "/admin/campaigns", label: "Campaigns", icon: QrCode },
     { href: "/admin/creators", label: "Creators", icon: Sparkles },
+    { href: "/admin/funnel", label: "First 10,000", icon: BarChart3 },
     { href: "/admin/config", label: "Configuration", icon: Settings },
   ];
 

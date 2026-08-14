@@ -13,6 +13,7 @@ import type { DealerRole } from "@/server/validation/enums";
 import { logAudit } from "@/server/audit/log";
 import { notifyDealerTeam } from "@/server/notifications/dealer-fanout";
 import { notifyConsumer } from "@/server/notifications/create";
+import { logError } from "@/server/logging/log";
 
 /**
  * Verifies the lead belongs to this dealership, and — for a salesperson,
@@ -186,6 +187,7 @@ export async function markLeadSold(
     if (isUniqueViolation(err, "attributed_sales_lead_id_unique")) {
       return { ok: false, error: "This lead has already been marked sold." };
     }
+    logError("dealer.lead.mark_sold", err, { leadId, dealershipId });
     throw err;
   }
 

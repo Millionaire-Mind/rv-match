@@ -12,6 +12,7 @@ import { logAudit } from "@/server/audit/log";
 import { fetchFeedText, assertPublicFeedUrl } from "@/server/dealer/feed-import/fetch-feed";
 import { applyFieldMapping, parseFeedText, validateMappedRows, type FeedFormat } from "@/server/dealer/feed-import/parse";
 import { runFeedImport, type FeedRunSummary } from "@/server/dealer/feed-import/run";
+import { logError } from "@/server/logging/log";
 
 export type FeedSourceFormState = { ok: false; error: string } | { ok: true; feedSourceId: string };
 
@@ -156,6 +157,7 @@ export async function previewFeedSource(dealershipId: string, formData: FormData
       })),
     };
   } catch (err) {
+    logError("dealer.feed.preview", err, { dealershipId, url: d.url });
     return { ok: false, error: err instanceof Error ? err.message : "Could not preview this feed." };
   }
 }

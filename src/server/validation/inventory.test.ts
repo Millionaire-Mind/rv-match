@@ -84,4 +84,29 @@ describe("csvRowSchema", () => {
       expect(result.success && result.data.bunkhouse).toBe(true);
     }
   });
+
+  it("rejects a sale_price beyond any plausible RV price instead of accepting an unbounded number", () => {
+    const result = csvRowSchema.safeParse({ ...validRow, sale_price: "999999999999" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects physically implausible dimensions/weights/capacity instead of accepting them unbounded", () => {
+    expect(csvRowSchema.safeParse({ ...validRow, length_feet: "99999" }).success).toBe(false);
+    expect(csvRowSchema.safeParse({ ...validRow, width_inches: "99999" }).success).toBe(false);
+    expect(csvRowSchema.safeParse({ ...validRow, height_inches: "99999" }).success).toBe(false);
+    expect(csvRowSchema.safeParse({ ...validRow, gvwr_lbs: "99999999" }).success).toBe(false);
+    expect(csvRowSchema.safeParse({ ...validRow, sleeps: "9999" }).success).toBe(false);
+    expect(csvRowSchema.safeParse({ ...validRow, slide_count: "9999" }).success).toBe(false);
+  });
+
+  it("still accepts realistic values at the boundary", () => {
+    const result = csvRowSchema.safeParse({
+      ...validRow,
+      sale_price: "250000",
+      length_feet: "42",
+      sleeps: "10",
+      slide_count: "4",
+    });
+    expect(result.success).toBe(true);
+  });
 });

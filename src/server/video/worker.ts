@@ -17,6 +17,7 @@ import { uploadBuffer, isLocalStorage } from "@/server/storage";
 import { formatCurrency } from "@/lib/utils";
 import { rvTypeLabels } from "@/server/validation/enums";
 import { notifyDealerTeam } from "@/server/notifications/dealer-fanout";
+import { logError } from "@/server/logging/log";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 
 const MAX_ATTEMPTS = 3;
@@ -168,6 +169,7 @@ async function runJob(jobId: string, attempts: number): Promise<void> {
       await db.update(inventory).set({ primaryVideoId: videoRow.id }).where(eq(inventory.id, rv.id));
     }
   } catch (err) {
+    logError("video.worker.run_job", err, { jobId });
     await markJobFailed(jobId, attempts, err instanceof Error ? err.message : "Unknown error");
     throw err;
   }

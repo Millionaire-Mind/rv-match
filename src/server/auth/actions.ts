@@ -10,6 +10,7 @@ import { authSignIn, authSignOut, authSignUp, AuthError } from "./provider";
 import { getOrCreateAnonymousSessionId } from "./anonymous";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { getClientIp } from "@/server/security/client-ip";
+import { logError } from "@/server/logging/log";
 
 export type AuthActionState = { error: string } | { error: null };
 
@@ -74,7 +75,9 @@ export async function signUpAction(
     const result = await authSignUp(parsed.data);
     userId = result.userId;
   } catch (err) {
-    return { error: err instanceof AuthError ? err.message : "Could not create your account." };
+    if (err instanceof AuthError) return { error: err.message };
+    logError("auth.signup", err);
+    return { error: "Could not create your account." };
   }
 
   await mergeAnonymousHistory(userId);
@@ -110,7 +113,9 @@ export async function signInAction(
     const result = await authSignIn(parsed.data);
     userId = result.userId;
   } catch (err) {
-    return { error: err instanceof AuthError ? err.message : "Invalid email or password." };
+    if (err instanceof AuthError) return { error: err.message };
+    logError("auth.signin", err);
+    return { error: "Invalid email or password." };
   }
 
   await mergeAnonymousHistory(userId);

@@ -11,6 +11,7 @@ import { slugify } from "@/lib/utils";
 import { logAudit } from "@/server/audit/log";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { getClientIp } from "@/server/security/client-ip";
+import { logError } from "@/server/logging/log";
 
 export type DealerApplicationState = { ok: false; error: string } | { ok: true };
 
@@ -59,7 +60,9 @@ export async function submitDealerApplication(
     const result = await authSignUp({ email: d.email, password: d.password, fullName: d.primaryContactName });
     userId = result.userId;
   } catch (err) {
-    return { ok: false, error: err instanceof AuthError ? err.message : "Could not create your account." };
+    if (err instanceof AuthError) return { ok: false, error: err.message };
+    logError("dealer.apply.signup", err);
+    return { ok: false, error: "Could not create your account." };
   }
 
   const slug = await uniqueSlug(d.dealershipName);
@@ -110,7 +113,8 @@ export async function submitDealerApplication(
         tx,
       );
     });
-  } catch {
+  } catch (err) {
+    logError("dealer.apply.setup", err, { userId });
     return {
       ok: false,
       error: "Your account was created, but we couldn't finish setting up your dealership. Please contact support.",

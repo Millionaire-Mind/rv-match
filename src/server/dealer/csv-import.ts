@@ -7,6 +7,7 @@ import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { csvRowSchema } from "@/server/validation/inventory";
 import { upsertInventoryRow } from "@/server/dealer/inventory-upsert";
 import { logAudit } from "@/server/audit/log";
+import { logError } from "@/server/logging/log";
 import { revalidatePath } from "next/cache";
 
 export interface CsvImportRowResult {
@@ -40,6 +41,7 @@ export async function importInventoryCsv(
   try {
     records = parse(text, { columns: true, skip_empty_lines: true, trim: true });
   } catch (err) {
+    logError("dealer.csv_import.parse", err, { dealershipId });
     return {
       totalRows: 0,
       created: 0,
@@ -74,6 +76,7 @@ export async function importInventoryCsv(
       if (result.action === "created") created += 1;
       else updated += 1;
     } catch (err) {
+      logError("dealer.csv_import.row", err, { dealershipId, row: rowNumber });
       results.push({
         row: rowNumber,
         stockNumber: parsed.data.stock_number,

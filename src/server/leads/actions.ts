@@ -12,6 +12,7 @@ import { computeIntentScore } from "@/server/recommendation/purchase-intent";
 import { getDealerScopedBehaviorSnapshot } from "@/server/recommendation/profile";
 import { getFirstTouchAttribution } from "@/server/attribution/first-touch";
 import { sendMail } from "@/server/email/mailer";
+import { escapeHtml } from "@/server/email/escape-html";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { formatCurrency } from "@/lib/utils";
 import { leadCtaLabels } from "@/server/validation/enums";
@@ -144,10 +145,10 @@ export async function submitLead(
     ]
       .filter(Boolean)
       .join("\n"),
-    html: `<p><strong>${data.name}</strong> used "${leadCtaLabels[data.ctaType]}" on your ${rv.year} ${rv.make} ${rv.model} (${formatCurrency(rv.advertisedPriceCents ?? rv.salePriceCents)}).</p>
-      <p>Contact: ${data.email ?? "n/a"} ${data.phone ?? ""}<br/>Preferred contact: ${data.preferredContact}</p>
-      ${data.message ? `<p>Message: ${data.message}</p>` : ""}
-      <p>Purchase-intent score: <strong>${intent.score}/100</strong><br/>${intent.reasons.join("; ")}</p>
+    html: `<p><strong>${escapeHtml(data.name)}</strong> used "${escapeHtml(leadCtaLabels[data.ctaType])}" on your ${rv.year} ${escapeHtml(rv.make)} ${escapeHtml(rv.model)} (${formatCurrency(rv.advertisedPriceCents ?? rv.salePriceCents)}).</p>
+      <p>Contact: ${escapeHtml(data.email ?? "n/a")} ${escapeHtml(data.phone ?? "")}<br/>Preferred contact: ${escapeHtml(data.preferredContact)}</p>
+      ${data.message ? `<p>Message: ${escapeHtml(data.message)}</p>` : ""}
+      <p>Purchase-intent score: <strong>${intent.score}/100</strong><br/>${escapeHtml(intent.reasons.join("; "))}</p>
       <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dealer/leads">Open your lead inbox</a></p>`,
   });
 

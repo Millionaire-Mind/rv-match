@@ -12,7 +12,7 @@ export const dealerApplicationSchema = z
     phone: z.string().trim().min(7, "Phone number is required.").max(30),
     website: z.union([z.string().trim().url("Enter a valid URL."), z.literal("")]).optional(),
     primaryContactName: z.string().trim().min(1, "Contact name is required.").max(200),
-    inventorySizeEstimate: z.coerce.number().int().nonnegative().optional(),
+    inventorySizeEstimate: z.coerce.number().int().nonnegative().max(100_000).optional(),
     email: emailSchema,
     password: passwordSchema,
     agreement: z.boolean(),

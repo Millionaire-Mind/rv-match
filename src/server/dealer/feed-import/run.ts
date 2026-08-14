@@ -5,6 +5,7 @@ import { inventoryFeedRuns, inventoryFeedSources } from "@/server/db/schema";
 import { upsertInventoryRow } from "@/server/dealer/inventory-upsert";
 import { fetchFeedText } from "./fetch-feed";
 import { applyFieldMapping, parseFeedText, validateMappedRows, type FeedFormat } from "./parse";
+import { logError } from "@/server/logging/log";
 
 export interface FeedRunSummary {
   runId: string;
@@ -66,6 +67,7 @@ export async function runFeedImport(feedSourceId: string): Promise<FeedRunSummar
         if (result.action === "created") rowsCreated += 1;
         else rowsUpdated += 1;
       } catch (err) {
+        logError("dealer.feed_import.row", err, { feedSourceId, stockNumber: row.data.stock_number });
         rowsFailed += 1;
         if (errors.length < MAX_STORED_ERRORS) {
           errors.push(`${row.data.stock_number}: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -80,6 +82,7 @@ export async function runFeedImport(feedSourceId: string): Promise<FeedRunSummar
       finalStatus = "failed";
     }
   } catch (err) {
+    logError("dealer.feed_import.run", err, { feedSourceId });
     finalStatus = "failed";
     errors.push(err instanceof Error ? err.message : "Unknown error fetching/parsing the feed.");
   }

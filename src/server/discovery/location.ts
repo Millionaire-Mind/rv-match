@@ -10,6 +10,9 @@ import { geocodeZip } from "@/server/geo/zip-centroids";
 import { trackEvent } from "@/server/analytics/track";
 
 const zipSchema = z.string().regex(/^\d{5}$/, "Enter a 5-digit ZIP code.");
+const radiusMilesSchema = z.number().int().positive().max(500);
+const latSchema = z.number().min(-90).max(90);
+const lngSchema = z.number().min(-180).max(180);
 
 export async function submitZipCode(zip: string): Promise<{ ok: boolean; error?: string }> {
   const parsed = zipSchema.safeParse(zip);
@@ -34,18 +37,25 @@ export async function submitZipCode(zip: string): Promise<{ ok: boolean; error?:
 }
 
 export async function setSearchRadius(radiusMiles: number): Promise<void> {
+  const parsed = radiusMilesSchema.safeParse(radiusMiles);
+  if (!parsed.success) return;
+
   const consumerProfileId = await getOrCreateConsumerProfileId();
   await db
     .update(consumerProfiles)
-    .set({ radiusMiles })
+    .set({ radiusMiles: parsed.data })
     .where(eq(consumerProfiles.id, consumerProfileId));
 }
 
 export async function submitGeolocation(lat: number, lng: number): Promise<void> {
+  const parsedLat = latSchema.safeParse(lat);
+  const parsedLng = lngSchema.safeParse(lng);
+  if (!parsedLat.success || !parsedLng.success) return;
+
   const consumerProfileId = await getOrCreateConsumerProfileId();
   await db
     .update(consumerProfiles)
-    .set({ lat: lat.toFixed(6), lng: lng.toFixed(6) })
+    .set({ lat: parsedLat.data.toFixed(6), lng: parsedLng.data.toFixed(6) })
     .where(eq(consumerProfiles.id, consumerProfileId));
   await trackEvent({ consumerProfileId, eventType: "location_added", metadata: { source: "geolocation" } });
 }

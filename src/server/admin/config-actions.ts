@@ -12,7 +12,6 @@ import {
   recommendationWeightsSchema,
 } from "@/server/recommendation/config";
 import { logAudit } from "@/server/audit/log";
-import { eq } from "drizzle-orm";
 
 const SCHEMAS = {
   recommendation_weights: recommendationWeightsSchema,
@@ -48,24 +47,21 @@ export async function updateAdminConfiguration(
     return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
   }
 
-  await db
-    .insert(adminConfiguration)
-    .values({ key, value: parsed.data, updatedBy: adminId })
-    .onConflictDoUpdate({
-      target: adminConfiguration.key,
-      set: { value: parsed.data, updatedBy: adminId, updatedAt: new Date() },
-    });
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(adminConfiguration)
+      .values({ key, value: parsed.data, updatedBy: adminId })
+      .onConflictDoUpdate({
+        target: adminConfiguration.key,
+        set: { value: parsed.data, updatedBy: adminId, updatedAt: new Date() },
+      });
 
-  await logAudit({ action: "config.update", entityType: "admin_configuration", entityId: key });
+    // admin_configuration is keyed by a text `key` (e.g. "recommendation_weights"),
+    // not a uuid - entityId is a uuid column, so the config key belongs in
+    // metadata instead of being forced into entityId.
+    await logAudit({ action: "config.update", entityType: "admin_configuration", metadata: { key } }, tx);
+  });
+
   revalidatePath("/admin/config");
   return { ok: true };
-}
-
-export async function getAdminConfigurationValue(key: ConfigKey): Promise<unknown> {
-  const [row] = await db
-    .select({ value: adminConfiguration.value })
-    .from(adminConfiguration)
-    .where(eq(adminConfiguration.key, key))
-    .limit(1);
-  return row?.value ?? null;
 }

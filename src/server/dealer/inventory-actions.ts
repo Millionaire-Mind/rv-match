@@ -24,6 +24,7 @@ import { uploadBuffer } from "@/server/storage";
 import { logAudit } from "@/server/audit/log";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { validateAndNormalizeUploadedVideo } from "@/server/video/validate";
+import { extensionForImageType, sniffImageType } from "@/server/dealer/photo-validate";
 import { geocodeZip } from "@/server/geo/zip-centroids";
 import { notifyPriceDropForSavers } from "@/server/notifications/price-drop";
 import { notifyStrongMatchesForInventory } from "@/server/notifications/strong-match";
@@ -318,6 +319,11 @@ export async function uploadInventoryPhotos(
   const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { ok: true };
 
+  // Read and content-sniff every file up front, before uploading any of
+  // them - the declared file.type/extension prove nothing about the real
+  // bytes (see photo-validate.ts), and rejecting file 3 of 5 after files
+  // 1-2 are already stored would leave a half-applied upload.
+  const validated: { name: string; buffer: Buffer; type: "image/jpeg" | "image/png" | "image/webp" }[] = [];
   for (const file of files) {
     if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
       return { ok: false, error: `${file.name}: unsupported file type. Use JPEG, PNG, or WebP.` };
@@ -325,6 +331,12 @@ export async function uploadInventoryPhotos(
     if (file.size > MAX_PHOTO_BYTES) {
       return { ok: false, error: `${file.name}: exceeds the ${MAX_PHOTO_BYTES / 1024 / 1024}MB photo limit.` };
     }
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const sniffed = sniffImageType(buffer);
+    if (!sniffed) {
+      return { ok: false, error: `${file.name}: file contents don't match a supported image format.` };
+    }
+    validated.push({ name: file.name, buffer, type: sniffed });
   }
 
   const existingCount = await db
@@ -334,12 +346,11 @@ export async function uploadInventoryPhotos(
 
   let position = existingCount.length;
   let firstPhotoId: string | null = null;
-  for (const file of files) {
-    const buffer = Buffer.from(await file.arrayBuffer());
+  for (const { buffer, type } of validated) {
     const url = await uploadBuffer(
-      `photos/${inventoryId}/${Date.now()}-${position}.jpg`,
+      `photos/${inventoryId}/${Date.now()}-${position}.${extensionForImageType(type)}`,
       buffer,
-      file.type || "image/jpeg",
+      type,
     );
     const [row] = await db
       .insert(inventoryPhotos)

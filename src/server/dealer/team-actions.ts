@@ -12,7 +12,9 @@ import { authSignUp, AuthError } from "@/server/auth/provider";
 import { OWNER_ONLY } from "@/server/dealer/permissions";
 import { dealerRoleLabels, dealerRoleSchema } from "@/server/validation/enums";
 import { sendMail } from "@/server/email/mailer";
+import { escapeHtml } from "@/server/email/escape-html";
 import { logAudit } from "@/server/audit/log";
+import { logError } from "@/server/logging/log";
 
 export type TeamActionState = { ok: false; error: string } | { ok: true };
 
@@ -95,7 +97,9 @@ export async function inviteDealerUser(dealershipId: string, formData: FormData)
       const result = await authSignUp({ email: normalizedEmail, password: tempPassword, fullName });
       targetUserId = result.userId;
     } catch (err) {
-      return { ok: false, error: err instanceof AuthError ? err.message : "Could not create an account for this email." };
+      if (err instanceof AuthError) return { ok: false, error: err.message };
+      logError("dealer.team.invite", err, { dealershipId });
+      return { ok: false, error: "Could not create an account for this email." };
     }
   }
 
@@ -107,7 +111,7 @@ export async function inviteDealerUser(dealershipId: string, formData: FormData)
   await sendMail({
     to: normalizedEmail,
     subject: `You've been added to ${dealership.name} on RV Match`,
-    html: `<p>You've been added to <strong>${dealership.name}</strong> on RV Match as a <strong>${dealerRoleLabels[role]}</strong>.</p>${loginNote}`,
+    html: `<p>You've been added to <strong>${escapeHtml(dealership.name)}</strong> on RV Match as a <strong>${dealerRoleLabels[role]}</strong>.</p>${loginNote}`,
     text: `You've been added to ${dealership.name} on RV Match as a ${dealerRoleLabels[role]}. ${
       tempPassword ? `Temporary password: ${tempPassword}` : "Sign in with your existing RV Match account."
     }`,

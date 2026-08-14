@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { consumerProfiles, notifications, profiles } from "@/server/db/schema";
 import { sendMail } from "@/server/email/mailer";
+import { escapeHtml } from "@/server/email/escape-html";
 
 export interface NotifyParams {
   type: string;
@@ -41,7 +42,7 @@ export async function notifyConsumer(consumerProfileId: string, params: NotifyPa
   const [user] = await db.select({ email: profiles.email }).from(profiles).where(eq(profiles.id, profile.userId)).limit(1);
   if (!user?.email) return;
 
-  await sendMail({ to: user.email, subject: params.title, text: params.body, html: `<p>${params.body}</p>` });
+  await sendMail({ to: user.email, subject: params.title, text: params.body, html: `<p>${escapeHtml(params.body)}</p>` });
 }
 
 /** Dealer team members are always signed in, so email is always attempted. */
@@ -63,5 +64,5 @@ export async function notifyDealerUser(
   const [user] = await db.select({ email: profiles.email }).from(profiles).where(eq(profiles.id, userId)).limit(1);
   if (!user?.email) return;
 
-  await sendMail({ to: user.email, subject: params.title, text: params.body, html: `<p>${params.body}</p>` });
+  await sendMail({ to: user.email, subject: params.title, text: params.body, html: `<p>${escapeHtml(params.body)}</p>` });
 }

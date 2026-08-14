@@ -443,10 +443,16 @@ test.describe("Gap 9: match score persisted on leads", () => {
     await page.waitForURL(/\/rv\//, { timeout: 10000 });
     const inventoryId = page.url().split("/rv/")[1]?.split(/[/?]/)[0];
 
-    const isRockyMountain = (await page.getByText("Rocky Mountain RV Center").count()) > 0;
-    const dealerEmail = isRockyMountain
-      ? "owner@rockymountainrv.example"
-      : "owner@sunshinestatervs.example";
+    // Resolve the owning dealer's login directly from the DB (by this
+    // exact RV's dealership) rather than scraping page text for a
+    // dealership name - reliable regardless of which of the two seeded
+    // dealers happened to serve this RV.
+    const [rvRow] = await db.select({ dealershipId: inventory.dealershipId }).from(inventory).where(eq(inventory.id, inventoryId!));
+    const [dealerRow] = await db
+      .select({ email: dealerships.primaryContactEmail })
+      .from(dealerships)
+      .where(eq(dealerships.id, rvRow.dealershipId));
+    const dealerEmail = dealerRow.email;
 
     const leadEmail = `e2e-match-score-${Date.now()}@example.com`;
     await page.getByRole("button", { name: "Check Availability" }).click();

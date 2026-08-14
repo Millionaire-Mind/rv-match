@@ -42,7 +42,8 @@ test.describe("Dealer journey", () => {
     await page.goto("/dealer/inventory/new");
     await page.getByLabel("Stock Number").fill(stockNumber);
     await page.getByLabel("Year").fill("2024");
-    await page.getByLabel("Make").fill("E2E Make");
+    await page.getByLabel("Make (manufacturer)").fill("E2E Make");
+    await page.getByLabel("Brand").fill("E2E Brand");
     await page.getByLabel("Model").fill("E2E Model");
     await page.getByLabel("Sale Price ($)").fill("41500");
     await page.getByRole("button", { name: "Create RV" }).click();

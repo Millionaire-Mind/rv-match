@@ -105,7 +105,11 @@ describe("listPlatformUsers", () => {
 
 describe("listConsumers", () => {
   it("includes an anonymous consumer with saved and decision counts", async () => {
-    const rows = await listConsumers();
+    // A large explicit limit, not the production default (100) - this
+    // test verifies the row's shape, not the ordering/limiting behavior
+    // itself, so it shouldn't be sensitive to how many other real
+    // consumer_profiles rows happen to exist in a shared dev database.
+    const rows = await listConsumers(10_000);
     const row = rows.find((c) => c.id === consumerProfileId);
     expect(row).toBeDefined();
     expect(row!.signedUp).toBe(false);

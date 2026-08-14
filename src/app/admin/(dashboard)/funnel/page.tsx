@@ -10,11 +10,21 @@ export const dynamic = "force-dynamic";
 
 const FIRST_MILESTONE = 10_000;
 
+/** Every value src/server/attribution/source.ts's ACQUISITION_SOURCES can
+ * actually produce (Gap 4F), plus "unknown" for a session predating that
+ * taxonomy. Never collapsed into "Direct" - social/organic/referral are
+ * real, distinct buckets once UTM/referrer data exists for them. */
 const SOURCE_LABELS: Record<string, string> = {
-  direct: "Direct",
-  qr: "Dealer QR / Link",
+  dealer: "Dealer Link",
+  salesperson: "Salesperson Link",
+  qr: "Dealer QR (per-RV)",
+  campaign: "Marketing Campaign",
   creator: "Creator Referral",
+  social: "Social Media",
+  organic: "Organic Search",
+  referral: "Referral",
   partner: "Partner Invite",
+  direct: "Direct",
   unknown: "Unknown",
 };
 
@@ -40,26 +50,32 @@ export default async function AdminFunnelPage() {
       </div>
 
       <div className="rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
-        Segmented by the source recorded on a shopper&apos;s very first visit (never overwritten later). &quot;Dealer
-        QR / Link&quot; covers every dealer-generated distribution link, however it was shared. Social-media and
-        search-engine referrals aren&apos;t yet distinguishable from Direct - that requires UTM capture this
-        platform doesn&apos;t have yet - so no separate &quot;Social&quot; or &quot;Organic&quot; number is shown
-        rather than estimate one.
+        Segmented by the source recorded on a shopper&apos;s very first visit (never overwritten later), using the
+        full acquisition taxonomy - Dealer Link, Salesperson Link, Dealer QR, Marketing Campaign, Creator Referral,
+        Social Media, Organic Search, Referral, Partner Invite, and Direct. Social/organic/referral traffic is only
+        distinguished from Direct once its UTM tag or HTTP referrer is present; a session with neither genuinely
+        can&apos;t be told apart from Direct and is counted there rather than guessed.
       </div>
 
       {segments.length === 0 ? (
         <p className="text-muted-foreground">No sessions recorded yet.</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[1180px] text-sm">
             <thead className="bg-secondary/60 text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">Source</th>
-                <th className="px-4 py-3 text-right">Sessions</th>
+                <th className="px-4 py-3 text-right">Visitors</th>
+                <th className="px-4 py-3 text-right">Discovery Starts</th>
                 <th className="px-4 py-3 text-right">3+ Decisions</th>
                 <th className="px-4 py-3 text-right">Activated (10+)</th>
+                <th className="px-4 py-3 text-right">Match Completed (20)</th>
                 <th className="px-4 py-3 text-right">Accounts</th>
-                <th className="px-4 py-3 text-right">Leads</th>
+                <th className="px-4 py-3 text-right">Returning</th>
+                <th className="px-4 py-3 text-right">Partner Invites</th>
+                <th className="px-4 py-3 text-right">Dealer Contacts</th>
+                <th className="px-4 py-3 text-right">Appointments</th>
+                <th className="px-4 py-3 text-right">Sold (reported)</th>
                 <th className="px-4 py-3 text-right">Verified Sales</th>
               </tr>
             </thead>
@@ -70,10 +86,16 @@ export default async function AdminFunnelPage() {
                     <Badge variant="outline">{SOURCE_LABELS[s.source] ?? s.source}</Badge>
                   </td>
                   <td className="px-4 py-3 text-right">{s.sessionsStarted}</td>
+                  <td className="px-4 py-3 text-right">{s.discoveryStarters}</td>
                   <td className="px-4 py-3 text-right">{s.threeDecisionUsers}</td>
                   <td className="px-4 py-3 text-right">{s.activatedShoppers}</td>
+                  <td className="px-4 py-3 text-right">{s.matchCompleters}</td>
                   <td className="px-4 py-3 text-right">{s.accountsCreated}</td>
+                  <td className="px-4 py-3 text-right">{s.returningShoppers}</td>
+                  <td className="px-4 py-3 text-right">{s.partnerInvites}</td>
                   <td className="px-4 py-3 text-right">{s.leadsCount}</td>
+                  <td className="px-4 py-3 text-right">{s.appointmentsCount}</td>
+                  <td className="px-4 py-3 text-right">{s.reportedSales}</td>
                   <td className="px-4 py-3 text-right">{s.verifiedSales}</td>
                 </tr>
               ))}

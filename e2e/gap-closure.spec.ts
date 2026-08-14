@@ -480,3 +480,37 @@ test.describe("Gap 9: match score persisted on leads", () => {
     await expect(dealerPage.getByText(`${Math.round(Number(lead.matchScore))}`).first()).toBeVisible();
   });
 });
+
+test.describe("Gap 11: First-10,000 funnel completeness and segmentation", () => {
+  test("the admin funnel page shows the full acquisition taxonomy and the completed funnel stages, never collapsing social/organic into Direct", async ({
+    page,
+  }) => {
+    await page.goto("/admin/login");
+    await page.getByLabel("Email").fill("admin@rvmatch.app");
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL(/\/admin$/, { timeout: 15000 });
+
+    await page.goto("/admin/funnel");
+    await expect(page.getByRole("heading", { name: "First 10,000" })).toBeVisible();
+
+    // The stale claim ("no UTM capture yet") must be gone now that Gap 4F
+    // added real UTM/referrer classification.
+    await expect(page.getByText(/no UTM capture/i)).not.toBeVisible();
+
+    // Every completed funnel stage column is present, not just the
+    // original session/decision/account/lead/sale set.
+    for (const column of [
+      "Discovery Starts",
+      "Match Completed (20)",
+      "Returning",
+      "Partner Invites",
+      "Dealer Contacts",
+      "Appointments",
+      "Sold (reported)",
+      "Verified Sales",
+    ]) {
+      await expect(page.getByRole("columnheader", { name: column })).toBeVisible();
+    }
+  });
+});

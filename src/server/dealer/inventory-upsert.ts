@@ -4,6 +4,7 @@ import { db } from "@/server/db/client";
 import { inventory, inventoryFeatures, inventoryPriceHistory } from "@/server/db/schema";
 import { geocodeZip } from "@/server/geo/zip-centroids";
 import type { CsvRowInput } from "@/server/validation/inventory";
+import { notifyPriceDropForSavers } from "@/server/notifications/price-drop";
 
 /** Mirrors inventory-actions.ts's geocodeForZip - a row with no/unrecognizable ZIP honestly gets no coordinates rather than a guessed default. */
 function geocodeForZip(zipCode: string | undefined): { lat: string | null; lng: string | null } {
@@ -66,7 +67,7 @@ export async function upsertInventoryRow(
     lng: geo.lng,
   };
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: inventory.id, salePriceCents: inventory.salePriceCents })
       .from(inventory)
@@ -86,7 +87,7 @@ export async function upsertInventoryRow(
         .set({ ...fields, source })
         .where(eq(inventory.id, existing.id));
       await setFeaturesFromRow(tx, existing.id, row.features);
-      return { action: "updated", id: existing.id };
+      return { action: "updated" as const, id: existing.id, oldPriceCents: existing.salePriceCents };
     }
 
     const [created] = await tx
@@ -94,8 +95,14 @@ export async function upsertInventoryRow(
       .values({ dealershipId, stockNumber: row.stock_number, ...fields, status: "draft", source })
       .returning({ id: inventory.id });
     await setFeaturesFromRow(tx, created.id, row.features);
-    return { action: "created", id: created.id };
+    return { action: "created" as const, id: created.id, oldPriceCents: null };
   });
+
+  if (result.action === "updated" && result.oldPriceCents !== null) {
+    await notifyPriceDropForSavers(result.id, result.oldPriceCents, salePriceCents, `${row.year} ${row.make} ${row.model}`);
+  }
+
+  return { action: result.action, id: result.id };
 }
 
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];

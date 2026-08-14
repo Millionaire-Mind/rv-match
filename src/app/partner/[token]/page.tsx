@@ -13,6 +13,7 @@ import { getDecisionsCount } from "@/server/recommendation/profile";
 import { loadPlatformConfig } from "@/server/recommendation/config";
 import { trackEvent } from "@/server/analytics/track";
 import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
+import { notifyPartnerMatchCompleteOnce } from "@/server/partner/notify-match-complete";
 import { formatCurrency } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Compare With My Partner" };
@@ -112,6 +113,7 @@ export default async function PartnerPage({ params }: PartnerPageProps) {
   }
 
   await trackEvent({ consumerProfileId: viewerId, eventType: "shared_match_viewed" });
+  await notifyPartnerMatchCompleteOnce(token, ownerId, partnerId);
 
   const sharedMatches = await getSharedMatches(ownerId, partnerId, 9);
 

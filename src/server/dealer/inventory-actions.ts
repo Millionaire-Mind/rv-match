@@ -25,6 +25,8 @@ import { logAudit } from "@/server/audit/log";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { validateAndNormalizeUploadedVideo } from "@/server/video/validate";
 import { geocodeZip } from "@/server/geo/zip-centroids";
+import { notifyPriceDropForSavers } from "@/server/notifications/price-drop";
+import { notifyStrongMatchesForInventory } from "@/server/notifications/strong-match";
 
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024; // 300MB
@@ -246,6 +248,9 @@ export async function updateInventory(
   await logAudit({ action: "inventory.update", entityType: "inventory", entityId: inventoryId, dealershipId });
   revalidatePath("/dealer/inventory");
   revalidatePath(`/dealer/inventory/${inventoryId}`);
+
+  await notifyPriceDropForSavers(inventoryId, current.salePriceCents, newSalePriceCents, `${current.year} ${current.make} ${current.model}`);
+
   return { ok: true, inventoryId };
 }
 
@@ -267,18 +272,17 @@ export async function setInventoryStatus(
   await requireDealerRole(dealershipId, MANAGEMENT_ROLES);
   await requireInventoryInDealership(dealershipId, inventoryId);
 
-  if (status === "published") {
-    const [row] = await db
-      .select({ primaryVideoId: inventory.primaryVideoId })
-      .from(inventory)
-      .where(eq(inventory.id, inventoryId))
-      .limit(1);
-    if (!row?.primaryVideoId) {
-      return {
-        ok: false,
-        error: "This RV needs a video before it can be published. Upload a video or generate one automatically.",
-      };
-    }
+  const [current] = await db
+    .select({ status: inventory.status, primaryVideoId: inventory.primaryVideoId })
+    .from(inventory)
+    .where(eq(inventory.id, inventoryId))
+    .limit(1);
+
+  if (status === "published" && !current?.primaryVideoId) {
+    return {
+      ok: false,
+      error: "This RV needs a video before it can be published. Upload a video or generate one automatically.",
+    };
   }
 
   await db
@@ -293,6 +297,14 @@ export async function setInventoryStatus(
   });
   revalidatePath("/dealer/inventory");
   revalidatePath(`/dealer/inventory/${inventoryId}`);
+
+  // Only on a genuine draft/archived -> published transition, not a
+  // re-save while already published, so a dealer editing other fields on
+  // an already-live RV doesn't re-trigger a fresh round of notifications.
+  if (status === "published" && current?.status !== "published") {
+    await notifyStrongMatchesForInventory(inventoryId);
+  }
+
   return { ok: true };
 }
 

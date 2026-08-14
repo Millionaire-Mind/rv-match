@@ -4,6 +4,7 @@ import { db } from "@/server/db/client";
 import { dealerships, inventory, inventoryPhotos, savedInventory } from "@/server/db/schema";
 import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { scoreOneInventory } from "@/server/recommendation/engine";
+import { getRecentPriceDrops, type PriceDropInfo } from "@/server/inventory/price-history";
 
 export interface SavedCardData {
   savedId: string;
@@ -18,6 +19,7 @@ export interface SavedCardData {
   dealerName: string;
   fitScore: number | null;
   savedAt: Date;
+  priceDrop: PriceDropInfo | null;
 }
 
 export async function getSavedInventory(): Promise<SavedCardData[]> {
@@ -50,6 +52,8 @@ export async function getSavedInventory(): Promise<SavedCardData[]> {
   for (const p of photoRows) {
     if (!photoByInv.has(p.inventoryId)) photoByInv.set(p.inventoryId, p.url);
   }
+  const priceByInv = new Map(invRows.map((r) => [r.id, r.advertisedPriceCents ?? r.salePriceCents]));
+  const priceDrops = await getRecentPriceDrops(invIds, priceByInv);
 
   const results: SavedCardData[] = [];
   for (const row of rows) {
@@ -69,6 +73,7 @@ export async function getSavedInventory(): Promise<SavedCardData[]> {
       dealerName: dealerMap.get(rv.dealershipId) ?? "RV Dealer",
       fitScore: match.fitScore,
       savedAt: row.savedAt,
+      priceDrop: priceDrops.get(rv.id) ?? null,
     });
   }
   return results;

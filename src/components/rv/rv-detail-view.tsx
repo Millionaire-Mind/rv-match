@@ -56,6 +56,7 @@ interface RvDetailViewProps {
   explanations: string[];
   distanceMiles: number | null;
   isSaved: boolean;
+  priceDrop: { oldPriceCents: number; newPriceCents: number } | null;
 }
 
 export function RvDetailView({
@@ -69,6 +70,7 @@ export function RvDetailView({
   explanations,
   distanceMiles,
   isSaved,
+  priceDrop,
 }: RvDetailViewProps) {
   const [activeMedia, setActiveMedia] = useState(0); // 0 = video, 1..n = photos
   const [leadDialog, setLeadDialog] = useState<CtaType | null>(null);
@@ -157,10 +159,19 @@ export function RvDetailView({
           {rv.floorplan && <p className="text-muted-foreground">Floorplan {rv.floorplan}</p>}
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-bold">{formatCurrency(price)}</span>
-            {showMsrp && (
-              <span className="text-muted-foreground line-through">{formatCurrency(rv.msrpCents)}</span>
+            {priceDrop ? (
+              <span className="text-muted-foreground line-through">{formatCurrency(priceDrop.oldPriceCents)}</span>
+            ) : (
+              showMsrp && (
+                <span className="text-muted-foreground line-through">{formatCurrency(rv.msrpCents)}</span>
+              )
             )}
           </div>
+          {priceDrop && (
+            <Badge variant="accent" className="mt-1 w-fit">
+              Price drop: {formatCurrency(priceDrop.oldPriceCents - priceDrop.newPriceCents)} off
+            </Badge>
+          )}
           {dealer && (
             <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4" />

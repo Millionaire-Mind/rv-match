@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BarChart3, LayoutDashboard, ListChecks, Package, QrCode, UserCog, Users } from "lucide-react";
+import { BarChart3, Bell, LayoutDashboard, ListChecks, Package, QrCode, UserCog, Users } from "lucide-react";
 
 import { requireDealerContext } from "@/server/dealer/context";
 import { getPilotSummary } from "@/server/dealer/analytics";
+import { getDealerUserUnreadCount } from "@/server/notifications/queries";
 import { Badge } from "@/components/ui/badge";
 import { brand } from "@/config/brand";
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -14,9 +15,12 @@ import { ANALYTICS_ROLES, MARKETING_ROLES } from "@/server/dealer/permissions";
 // requireDealerContext redirects them to /dealer/pending before returning,
 // so this is the one place that decision is made (not duplicated here).
 export default async function DealerDashboardLayout({ children }: { children: React.ReactNode }) {
-  const { dealership, role } = await requireDealerContext();
+  const { userId, dealership, role } = await requireDealerContext();
 
-  const pilot = await getPilotSummary(dealership.id);
+  const [pilot, unreadCount] = await Promise.all([
+    getPilotSummary(dealership.id),
+    getDealerUserUnreadCount(userId),
+  ]);
 
   const nav = [
     { href: "/dealer", label: "Dashboard", icon: LayoutDashboard },
@@ -26,6 +30,7 @@ export default async function DealerDashboardLayout({ children }: { children: Re
     { href: "/dealer/leads", label: "Leads", icon: Users },
     { href: "/dealer/pilot", label: "Pilot", icon: ListChecks },
     ...(role === "owner" ? [{ href: "/dealer/team", label: "Team", icon: UserCog }] : []),
+    { href: "/dealer/notifications", label: "Notifications", icon: Bell, badge: unreadCount },
   ];
 
   return (
@@ -43,6 +48,11 @@ export default async function DealerDashboardLayout({ children }: { children: Re
             >
               <item.icon className="h-4 w-4" />
               {item.label}
+              {"badge" in item && (item.badge ?? 0) > 0 && (
+                <Badge variant="accent" className="h-5 min-w-5 justify-center px-1 text-xs">
+                  {item.badge! > 9 ? "9+" : item.badge}
+                </Badge>
+              )}
             </Link>
           ))}
         </nav>

@@ -15,6 +15,10 @@ import { sendMail } from "@/server/email/mailer";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { formatCurrency } from "@/lib/utils";
 import { leadCtaLabels } from "@/server/validation/enums";
+import { notifyDealerTeam } from "@/server/notifications/dealer-fanout";
+import { LEAD_WORKING_ROLES } from "@/server/dealer/permissions";
+
+const HIGH_INTENT_NOTIFY_THRESHOLD = 70;
 
 export type LeadFormState = { ok: false; error: string } | { ok: true };
 
@@ -108,6 +112,20 @@ export async function submitLead(
     dealershipId: dealer.id,
     metadata: { ctaType: data.ctaType },
   });
+
+  // One in-app + email notification per lead to the team that actually
+  // works leads (not the whole dealership roster) - typed by the most
+  // significant thing true about this lead, so a genuinely hot lead reads
+  // as urgent rather than getting buried as a routine "new lead" notice.
+  const rvLabel = `${rv.year} ${rv.make} ${rv.model}`;
+  const leadLink = `/dealer/leads/${lead.id}`;
+  const notification =
+    intent.score >= HIGH_INTENT_NOTIFY_THRESHOLD
+      ? { type: "high_intent_lead", title: `High-intent lead: ${data.name}`, body: `${data.name} (score ${intent.score}/100) is interested in your ${rvLabel}.` }
+      : data.ctaType === "schedule_walkthrough"
+        ? { type: "appointment_request", title: `Walkthrough requested: ${data.name}`, body: `${data.name} requested a walkthrough for your ${rvLabel}.` }
+        : { type: "new_lead", title: `New lead: ${data.name}`, body: `${data.name} used "${leadCtaLabels[data.ctaType]}" on your ${rvLabel}.` };
+  await notifyDealerTeam(dealer.id, LEAD_WORKING_ROLES, { ...notification, link: leadLink });
 
   await sendMail({
     to: dealer.primaryContactEmail,

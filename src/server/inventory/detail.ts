@@ -12,6 +12,7 @@ import {
 import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { scoreOneInventory } from "@/server/recommendation/engine";
 import { getDecisionsCount } from "@/server/recommendation/profile";
+import { getRecentPriceDrop } from "@/server/inventory/price-history";
 
 export async function getInventoryDetail(inventoryId: string) {
   const [rv] = await db.select().from(inventory).where(eq(inventory.id, inventoryId)).limit(1);
@@ -29,7 +30,8 @@ export async function getInventoryDetail(inventoryId: string) {
   ]);
 
   const consumerProfileId = await getOrCreateConsumerProfileId();
-  const [decisionsCount, match, savedRow] = await Promise.all([
+  const displayPriceCents = rv.advertisedPriceCents ?? rv.salePriceCents;
+  const [decisionsCount, match, savedRow, priceDrop] = await Promise.all([
     getDecisionsCount(consumerProfileId),
     scoreOneInventory(consumerProfileId, rv),
     db
@@ -42,6 +44,7 @@ export async function getInventoryDetail(inventoryId: string) {
         ),
       )
       .limit(1),
+    getRecentPriceDrop(rv.id, displayPriceCents),
   ]);
 
   const primaryVideo = videos.find((v) => v.id === rv.primaryVideoId) ?? videos[0] ?? null;
@@ -59,5 +62,6 @@ export async function getInventoryDetail(inventoryId: string) {
     distanceMiles: match.distanceMiles,
     isSaved: savedRow.length > 0,
     consumerProfileId,
+    priceDrop,
   };
 }

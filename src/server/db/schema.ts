@@ -162,6 +162,10 @@ export const partnerLinks = pgTable("partner_links", {
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   joinedAt: timestamp("joined_at", { withTimezone: true }),
+  /** Set the first time both partners cross the match-complete decision
+   * threshold, so the partner-match-complete notification fires exactly
+   * once, not on every subsequent visit to the shared match page. */
+  matchNotifiedAt: timestamp("match_notified_at", { withTimezone: true }),
 });
 
 // ---------------------------------------------------------------------------
@@ -439,6 +443,28 @@ export const behavioralEvents = pgTable("behavioral_events", {
   inventoryId: uuid("inventory_id").references(() => inventory.id, { onDelete: "cascade" }),
   dealershipId: uuid("dealership_id").references(() => dealerships.id, { onDelete: "cascade" }),
   metadata: jsonb("metadata").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * In-app notification records for both consumers and dealer team members.
+ * A consumer recipient is keyed by consumerProfileId (works for anonymous
+ * returning visitors via the persistent anonymous-session cookie, not just
+ * signed-in accounts); a dealer recipient is keyed by userId (dealer users
+ * are always signed in). Never both on the same row - see the
+ * notifications_recipient_chk constraint.
+ */
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientType: text("recipient_type").notNull(),
+  consumerProfileId: uuid("consumer_profile_id").references(() => consumerProfiles.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").references(() => profiles.id, { onDelete: "cascade" }),
+  dealershipId: uuid("dealership_id").references(() => dealerships.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  link: text("link"),
+  read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

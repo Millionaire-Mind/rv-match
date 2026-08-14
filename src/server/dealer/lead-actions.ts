@@ -5,12 +5,14 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/server/db/client";
-import { attributedSales, dealershipUsers, inventory, leadActivity, leads } from "@/server/db/schema";
+import { attributedSales, dealershipUsers, inventory, leadActivity, leads, savedInventory } from "@/server/db/schema";
 import { requireDealerRole } from "@/server/auth/guards";
 import { LEAD_WORKING_ROLES, MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 import { leadStatusSchema } from "@/server/validation/enums";
 import type { DealerRole } from "@/server/validation/enums";
 import { logAudit } from "@/server/audit/log";
+import { notifyDealerTeam } from "@/server/notifications/dealer-fanout";
+import { notifyConsumer } from "@/server/notifications/create";
 
 /**
  * Verifies the lead belongs to this dealership, and — for a salesperson,
@@ -190,6 +192,29 @@ export async function markLeadSold(
   revalidatePath("/dealer/leads");
   revalidatePath(`/dealer/leads/${leadId}`);
   revalidatePath("/dealer/pilot");
+
+  await notifyDealerTeam(dealershipId, MANAGEMENT_ROLES, {
+    type: "sale_awaiting_verification",
+    title: `Sale reported: ${soldRv.year} ${soldRv.make} ${soldRv.model}`,
+    body: "This sale is awaiting admin verification before it counts toward your pilot.",
+    link: `/dealer/leads/${leadId}`,
+  });
+
+  const savers = await db
+    .select({ consumerProfileId: savedInventory.consumerProfileId })
+    .from(savedInventory)
+    .where(eq(savedInventory.inventoryId, d.soldInventoryId));
+  await Promise.all(
+    savers.map((s) =>
+      notifyConsumer(s.consumerProfileId, {
+        type: "saved_rv_sold",
+        title: `${soldRv.year} ${soldRv.make} ${soldRv.model} has sold`,
+        body: "An RV you saved has sold. We found some similar RVs you might like.",
+        link: `/rv/${d.soldInventoryId}`,
+      }),
+    ),
+  );
+
   return { ok: true };
 }
 

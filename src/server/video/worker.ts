@@ -16,6 +16,8 @@ import { generateVerticalVideoFromPhotos } from "./generate";
 import { uploadBuffer, isLocalStorage } from "@/server/storage";
 import { formatCurrency } from "@/lib/utils";
 import { rvTypeLabels } from "@/server/validation/enums";
+import { notifyDealerTeam } from "@/server/notifications/dealer-fanout";
+import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
 
 const MAX_ATTEMPTS = 3;
 const STALE_PROCESSING_MINUTES = 15;
@@ -49,6 +51,22 @@ async function markJobFailed(jobId: string, attempts: number, message: string) {
     .update(videoGenerationJobs)
     .set({ status: "failed", attempts, errorMessage: message, completedAt: new Date() })
     .where(eq(videoGenerationJobs.id, jobId));
+
+  const [job] = await db
+    .select({ inventoryId: videoGenerationJobs.inventoryId })
+    .from(videoGenerationJobs)
+    .where(eq(videoGenerationJobs.id, jobId))
+    .limit(1);
+  if (!job) return;
+  const [rv] = await db.select().from(inventory).where(eq(inventory.id, job.inventoryId)).limit(1);
+  if (!rv) return;
+
+  await notifyDealerTeam(rv.dealershipId, MANAGEMENT_ROLES, {
+    type: "video_generation_failed",
+    title: `Video generation failed: ${rv.year} ${rv.make} ${rv.model}`,
+    body: message,
+    link: `/dealer/inventory/${rv.id}`,
+  });
 }
 
 /**

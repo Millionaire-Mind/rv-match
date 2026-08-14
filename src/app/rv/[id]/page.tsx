@@ -28,8 +28,19 @@ export default async function RvDetailPage({ params }: { params: Promise<{ id: s
   const detail = await getInventoryDetail(id);
   if (!detail || detail.rv.status === "archived") notFound();
 
-  const { rv, dealer, photos, primaryVideo, features, fitScore, explanations, distanceMiles, isSaved, consumerProfileId } =
-    detail;
+  const {
+    rv,
+    dealer,
+    photos,
+    primaryVideo,
+    features,
+    fitScore,
+    explanations,
+    distanceMiles,
+    isSaved,
+    consumerProfileId,
+    priceDrop,
+  } = detail;
 
   await Promise.all([
     trackEvent({
@@ -120,6 +131,7 @@ export default async function RvDetailPage({ params }: { params: Promise<{ id: s
         explanations={explanations}
         distanceMiles={distanceMiles}
         isSaved={isSaved}
+        priceDrop={priceDrop}
       />
     </main>
   );

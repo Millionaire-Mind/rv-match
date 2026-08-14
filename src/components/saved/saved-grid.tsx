@@ -67,6 +67,11 @@ export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
                 {item.fitScore}% Match
               </Badge>
             )}
+            {item.priceDrop && item.status !== "sold" && (
+              <Badge variant="accent" className="absolute bottom-2 left-2">
+                Price drop
+              </Badge>
+            )}
           </div>
           <div className="p-3">
             <p className="font-medium leading-tight">
@@ -74,7 +79,14 @@ export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
             </p>
             <p className="text-sm text-muted-foreground">{item.dealerName}</p>
             <div className="mt-1 flex items-center justify-between">
-              <span className="font-semibold">{formatCurrency(item.priceCents)}</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-semibold">{formatCurrency(item.priceCents)}</span>
+                {item.priceDrop && (
+                  <span className="text-xs text-muted-foreground line-through">
+                    {formatCurrency(item.priceDrop.oldPriceCents)}
+                  </span>
+                )}
+              </div>
               {item.status === "sold" ? (
                 <Button
                   size="sm"

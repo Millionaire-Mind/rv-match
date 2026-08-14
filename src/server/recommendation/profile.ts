@@ -1,7 +1,7 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { consumerPreferences, savedInventory, swipeDecisions } from "@/server/db/schema";
+import { consumerPreferences, inventory, savedInventory, swipeDecisions } from "@/server/db/schema";
 import { rvTypeLabels, type RvType } from "@/server/validation/enums";
 import { normalizedAttributeScore } from "./preferences";
 
@@ -86,6 +86,58 @@ export async function getBehaviorSnapshot(consumerProfileId: string): Promise<Be
       .where(eq(savedInventory.consumerProfileId, consumerProfileId)),
     getPreferenceHighlights(consumerProfileId, 4),
   ]);
+
+  const byDecision = Object.fromEntries(decisionCounts.map((d) => [d.decision, d.n]));
+  const rvsViewed = decisionCounts.reduce((sum, d) => sum + d.n, 0);
+
+  return {
+    rvsViewed,
+    likes: byDecision.like ?? 0,
+    loves: byDecision.love ?? 0,
+    passes: byDecision.pass ?? 0,
+    moreLikeThis: byDecision.more_like_this ?? 0,
+    saves: saveCountRow[0]?.n ?? 0,
+    topPreferences,
+  };
+}
+
+/**
+ * The same shape as getBehaviorSnapshot, but scoped to what a single
+ * dealer is actually entitled to see about a shopper: how they've behaved
+ * on *this dealer's own inventory*, not their platform-wide shopping
+ * history. getBehaviorSnapshot's swipe/save counts span every dealer's RVs
+ * and its preference highlights can include which make/dealer a shopper
+ * has been responding to elsewhere - both are real cross-dealer privacy
+ * leaks when frozen into a lead's behaviorSnapshot and shown to the dealer
+ * who received that lead. This is the only variant leads/actions.ts should
+ * ever use; getBehaviorSnapshot itself remains correct for showing a
+ * consumer their own cross-platform activity (e.g. the Match Results page).
+ */
+export async function getDealerScopedBehaviorSnapshot(
+  consumerProfileId: string,
+  dealershipId: string,
+): Promise<BehaviorSnapshot> {
+  const [decisionCounts, saveCountRow, rawPreferences] = await Promise.all([
+    db
+      .select({ decision: swipeDecisions.decision, n: count() })
+      .from(swipeDecisions)
+      .innerJoin(inventory, eq(swipeDecisions.inventoryId, inventory.id))
+      .where(and(eq(swipeDecisions.consumerProfileId, consumerProfileId), eq(inventory.dealershipId, dealershipId)))
+      .groupBy(swipeDecisions.decision),
+    db
+      .select({ n: count() })
+      .from(savedInventory)
+      .innerJoin(inventory, eq(savedInventory.inventoryId, inventory.id))
+      .where(and(eq(savedInventory.consumerProfileId, consumerProfileId), eq(inventory.dealershipId, dealershipId))),
+    getPreferenceHighlights(consumerProfileId, 8),
+  ]);
+
+  // "make" and "dealer" preferences directly name a brand or a specific
+  // dealership - exactly the cross-dealer competitive/behavioral signal
+  // this function exists to withhold. Every other attribute (rv_type,
+  // price_band, bunkhouse, etc.) describes the shopper's general taste
+  // without naming a competitor.
+  const topPreferences = rawPreferences.filter((p) => p.attribute !== "make" && p.attribute !== "dealer").slice(0, 4);
 
   const byDecision = Object.fromEntries(decisionCounts.map((d) => [d.decision, d.n]));
   const rvsViewed = decisionCounts.reduce((sum, d) => sum + d.n, 0);

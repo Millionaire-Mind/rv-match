@@ -9,7 +9,7 @@ import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { trackEvent } from "@/server/analytics/track";
 import { loadIntentWeights } from "@/server/recommendation/config";
 import { computeIntentScore } from "@/server/recommendation/purchase-intent";
-import { getBehaviorSnapshot } from "@/server/recommendation/profile";
+import { getDealerScopedBehaviorSnapshot } from "@/server/recommendation/profile";
 import { getFirstTouchAttribution } from "@/server/attribution/first-touch";
 import { sendMail } from "@/server/email/mailer";
 import { checkRateLimit } from "@/server/security/rate-limit";
@@ -72,7 +72,7 @@ export async function submitLead(
       ctaType: data.ctaType,
       weights: intentWeights,
     }),
-    getBehaviorSnapshot(consumerProfileId),
+    getDealerScopedBehaviorSnapshot(consumerProfileId, dealer.id),
     getFirstTouchAttribution(consumerProfileId),
   ]);
 

@@ -32,6 +32,11 @@ export const pilotStatusEnum = pgEnum("pilot_status", [
   "expired",
   "suspended",
 ]);
+// Gap 6: billing-ready plan schema only - no payment processing is
+// implemented anywhere in this codebase. See dealerPilots below.
+export const dealerPlanEnum = pgEnum("dealer_plan", ["founding_pilot", "standard", "premium"]);
+export const billingProviderEnum = pgEnum("billing_provider", ["none", "stripe"]);
+export const billingStatusEnum = pgEnum("billing_status", ["none", "trialing", "active", "past_due", "canceled"]);
 export const rvTypeEnum = pgEnum("rv_type", [
   "travel_trailer",
   "fifth_wheel",
@@ -230,6 +235,18 @@ export const dealerPilots = pgTable("dealer_pilots", {
   verifiedSalesCount: integer("verified_sales_count").notNull().default(0),
   status: pilotStatusEnum("status").notNull().default("pending"),
   convertedAt: timestamp("converted_at", { withTimezone: true }),
+  // Gap 6: billing-ready plan schema. Durable shape for a future payment
+  // integration to populate - nothing in this codebase writes a
+  // non-default value into these columns. NO PAYMENT PROCESSING IS
+  // IMPLEMENTED. trial start is already startedAt above.
+  plan: dealerPlanEnum("plan").notNull().default("founding_pilot"),
+  billingProvider: billingProviderEnum("billing_provider").notNull().default("none"),
+  billingStatus: billingStatusEnum("billing_status").notNull().default("none"),
+  externalCustomerId: text("external_customer_id"),
+  externalSubscriptionId: text("external_subscription_id"),
+  conversionDueAt: timestamp("conversion_due_at", { withTimezone: true }),
+  activatedAt: timestamp("activated_at", { withTimezone: true }),
+  canceledAt: timestamp("canceled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

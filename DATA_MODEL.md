@@ -29,7 +29,18 @@ Mirrored types for the app live in `src/server/db/schema.ts` (Drizzle).
   first; both are overrideable per dealer. `status`: `pending` → `active` →
   `conversion_due` → `converted` / `expired` / `suspended`.
   `verified_sales_count` increments only when an admin verifies a reported
-  sale (see `attributed_sales`).
+  sale (see `attributed_sales`). Also carries a **billing-ready data
+  architecture; payment processing not enabled**: `plan`
+  (`founding_pilot`/`standard`/`premium`), `billing_provider`
+  (`none`/`stripe`), `billing_status`
+  (`none`/`trialing`/`active`/`past_due`/`canceled`),
+  `external_customer_id`/`external_subscription_id` (a future payment
+  provider's IDs), and `conversion_due_at`/`activated_at`/`canceled_at`
+  timestamps. `started_at` doubles as the trial-start timestamp. No Stripe
+  integration, checkout flow, or payment collection exists anywhere in
+  this repository — these columns exist only so a future billing
+  integration has somewhere durable to write, and every application code
+  path leaves them at their default (`founding_pilot`/`none`/`none`/null).
 
 ## Inventory
 

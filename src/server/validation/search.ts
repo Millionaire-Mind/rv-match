@@ -11,6 +11,7 @@ import { rvConditionSchema, rvTypeSchema } from "./enums";
 export const searchFiltersSchema = z.object({
   rvType: rvTypeSchema.optional(),
   make: z.string().trim().min(1).max(100).optional(),
+  brand: z.string().trim().min(1).max(100).optional(),
   model: z.string().trim().min(1).max(100).optional(),
   floorplan: z.string().trim().min(1).max(100).optional(),
   yearMin: z.coerce.number().int().min(1970).max(2100).optional(),

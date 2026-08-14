@@ -128,6 +128,7 @@ const SHARED_PREFERENCE_DIMENSIONS: { attribute: string; label: string }[] = [
   { attribute: "rv_type", label: "RV Type" },
   { attribute: "price_band", label: "Price Range" },
   { attribute: "make", label: "Manufacturer" },
+  { attribute: "brand", label: "Brand" },
   { attribute: "bunkhouse", label: "Bunkhouse" },
   { attribute: "toy_hauler", label: "Toy Hauler" },
   { attribute: "outdoor_kitchen", label: "Outdoor Kitchen" },

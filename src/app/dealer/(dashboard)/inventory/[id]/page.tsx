@@ -93,6 +93,7 @@ export default async function EditInventoryPage({ params }: { params: Promise<{ 
               vin: rv.vin ?? undefined,
               year: rv.year,
               make: rv.make,
+              brand: rv.brand ?? undefined,
               model: rv.model,
               floorplan: rv.floorplan ?? undefined,
               rvType: rv.rvType,
@@ -119,6 +120,7 @@ export default async function EditInventoryPage({ params }: { params: Promise<{ 
               state: rv.state ?? undefined,
               zipCode: rv.zipCode ?? undefined,
               features: features.map((f) => f.feature).join(", "),
+              canonicalUrl: rv.canonicalUrl ?? undefined,
             }}
           />
         </CardContent>

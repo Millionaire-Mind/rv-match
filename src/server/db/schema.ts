@@ -198,6 +198,8 @@ export const dealerships = pgTable("dealerships", {
   lng: numeric("lng", { precision: 9, scale: 6 }),
   phone: text("phone"),
   website: text("website"),
+  facebookUrl: text("facebook_url"),
+  instagramUrl: text("instagram_url"),
   primaryContactName: text("primary_contact_name").notNull(),
   primaryContactEmail: text("primary_contact_email").notNull(),
   inventorySizeEstimate: integer("inventory_size_estimate"),
@@ -264,6 +266,11 @@ export const inventory = pgTable("inventory", {
   vin: text("vin"),
   year: integer("year").notNull(),
   make: text("make").notNull(),
+  /** The RV's brand/product line (e.g. "Rockwood") - distinct from make
+   * (manufacturer, e.g. "Forest River") and model. Nullable at the DB
+   * level (see the migration) but required by the manual dealer form and
+   * CSV/feed validation for every new/updated row. */
+  brand: text("brand"),
   model: text("model").notNull(),
   floorplan: text("floorplan"),
   rvType: rvTypeEnum("rv_type").notNull(),

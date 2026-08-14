@@ -9,7 +9,7 @@ import { VideoPlayer, videoMilestoneToEventType } from "@/components/discovery/v
 import { LeadDialog } from "./lead-dialog";
 import { SaveShareButtons } from "./save-share-buttons";
 import { ShowMeSimilarButton } from "./show-me-similar-button";
-import { formatCurrency, formatDistance } from "@/lib/utils";
+import { formatCurrency, formatDistance, formatRvTitle } from "@/lib/utils";
 import { rvTypeLabels, type RvType } from "@/server/validation/enums";
 import { recordClientEvent } from "@/server/discovery/actions";
 
@@ -26,8 +26,10 @@ interface RvDetailViewProps {
     id: string;
     year: number;
     make: string;
+    brand: string | null;
     model: string;
     floorplan: string | null;
+    canonicalUrl: string | null;
     rvType: string;
     condition: "new" | "used";
     msrpCents: number | null;
@@ -108,7 +110,7 @@ export function RvDetailView({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={photos[activeMedia === 0 ? 0 : activeMedia - 1] ?? photos[0]}
-            alt={`${rv.year} ${rv.make} ${rv.model}`}
+            alt={formatRvTitle(rv)}
             className="h-full w-full object-cover"
           />
         )}
@@ -153,10 +155,18 @@ export function RvDetailView({
             </Badge>
             <Badge variant="outline">{rvTypeLabels[rv.rvType as RvType] ?? rv.rvType}</Badge>
           </div>
-          <h1 className="mt-2 text-2xl font-semibold">
-            {rv.year} {rv.make} {rv.model}
-          </h1>
+          <h1 className="mt-2 text-2xl font-semibold">{formatRvTitle(rv)}</h1>
           {rv.floorplan && <p className="text-muted-foreground">Floorplan {rv.floorplan}</p>}
+          {rv.canonicalUrl && (
+            <a
+              href={rv.canonicalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-accent hover:underline"
+            >
+              View original listing ↗
+            </a>
+          )}
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-bold">{formatCurrency(price)}</span>
             {priceDrop ? (
@@ -271,7 +281,7 @@ export function RvDetailView({
           <SaveShareButtons
             inventoryId={rv.id}
             initialSaved={isSaved}
-            title={`${rv.year} ${rv.make} ${rv.model}`}
+            title={formatRvTitle(rv)}
           />
         </div>
       </div>

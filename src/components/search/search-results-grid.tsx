@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { RvVideoThumb } from "@/components/rv/rv-video-thumb";
-import { formatCurrency, formatDistance } from "@/lib/utils";
+import { formatCurrency, formatDistance, formatRvTitle } from "@/lib/utils";
 import type { SearchResultCard } from "@/server/search/query";
 
 /**
@@ -32,7 +32,7 @@ export function SearchResultsGrid({ results }: { results: SearchResultCard[] }) 
           <RvVideoThumb
             videoUrl={rv.videoUrl}
             photoUrl={rv.photoUrl}
-            alt={`${rv.year} ${rv.make} ${rv.model}`}
+            alt={formatRvTitle(rv)}
             badges={
               <Badge variant={rv.condition === "new" ? "accent" : "secondary"}>
                 {rv.condition === "new" ? "New" : "Used"}
@@ -40,9 +40,7 @@ export function SearchResultsGrid({ results }: { results: SearchResultCard[] }) 
             }
           />
           <div className="p-3">
-            <p className="font-medium leading-tight">
-              {rv.year} {rv.make} {rv.model}
-            </p>
+            <p className="font-medium leading-tight">{formatRvTitle(rv)}</p>
             <p className="text-sm text-muted-foreground">
               {rv.dealerName}
               {rv.distanceMiles !== null ? ` · ${formatDistance(rv.distanceMiles)}` : ""}

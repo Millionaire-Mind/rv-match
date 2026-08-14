@@ -11,6 +11,7 @@ export interface SearchResultCard {
   id: string;
   year: number;
   make: string;
+  brand: string | null;
   model: string;
   floorplan: string | null;
   rvTypeLabel: string;
@@ -42,6 +43,7 @@ export async function searchInventory(filters: SearchFilters, page = 1): Promise
 
   if (filters.rvType) conditions.push(eq(inventory.rvType, filters.rvType));
   if (filters.make) conditions.push(ilike(inventory.make, `%${filters.make}%`));
+  if (filters.brand) conditions.push(ilike(inventory.brand, `%${filters.brand}%`));
   if (filters.model) conditions.push(ilike(inventory.model, `%${filters.model}%`));
   if (filters.floorplan) conditions.push(ilike(inventory.floorplan, `%${filters.floorplan}%`));
   if (filters.condition) conditions.push(eq(inventory.condition, filters.condition));
@@ -102,6 +104,7 @@ export async function searchInventory(filters: SearchFilters, page = 1): Promise
       id: rv.id,
       year: rv.year,
       make: rv.make,
+      brand: rv.brand,
       model: rv.model,
       floorplan: rv.floorplan,
       rvType: rv.rvType,

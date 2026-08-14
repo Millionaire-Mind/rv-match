@@ -19,6 +19,21 @@ export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
+/**
+ * Gap 10: brand is a newly-split field, backfilled from the pre-existing
+ * model value for every row that predates it - so for a lot of real
+ * inventory, brand and model are currently identical (e.g. "Rockwood"
+ * appearing in both). Suppressing an exact duplicate here avoids showing
+ * "Forest River Rockwood Rockwood" without fabricating a distinct model
+ * value nobody ever actually entered.
+ */
+export function formatRvTitle(rv: { year: number; make: string; brand: string | null; model: string }): string {
+  const parts = [String(rv.year), rv.make];
+  if (rv.brand) parts.push(rv.brand);
+  if (rv.model && rv.model !== rv.brand) parts.push(rv.model);
+  return parts.join(" ");
+}
+
 export function formatPercent(value: number | null | undefined, digits = 0): string {
   if (value === null || value === undefined) return "—";
   return `${(value * 100).toFixed(digits)}%`;

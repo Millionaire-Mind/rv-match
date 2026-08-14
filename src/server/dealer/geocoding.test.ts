@@ -38,6 +38,7 @@ function baseForm(overrides: Record<string, string> = {}): FormData {
   fd.set("stockNumber", `GEO-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fd.set("year", "2024");
   fd.set("make", "Forest River");
+  fd.set("brand", "Rockwood");
   fd.set("model", "Rockwood");
   fd.set("rvType", "travel_trailer");
   fd.set("condition", "new");

@@ -66,6 +66,16 @@ export function DealerApplicationForm() {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
+          <Label htmlFor="facebookUrl">Facebook (optional)</Label>
+          <Input id="facebookUrl" name="facebookUrl" type="url" placeholder="https://facebook.com/..." />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="instagramUrl">Instagram (optional)</Label>
+          <Input id="instagramUrl" name="instagramUrl" type="url" placeholder="https://instagram.com/..." />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
           <Label htmlFor="primaryContactName">Primary contact</Label>
           <Input id="primaryContactName" name="primaryContactName" required />
         </div>

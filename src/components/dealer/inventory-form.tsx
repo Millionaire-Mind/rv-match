@@ -16,6 +16,7 @@ type InventoryDefaults = Partial<{
   vin: string;
   year: number;
   make: string;
+  brand: string;
   model: string;
   floorplan: string;
   rvType: string;
@@ -42,6 +43,7 @@ type InventoryDefaults = Partial<{
   state: string;
   zipCode: string;
   features: string;
+  canonicalUrl: string;
 }>;
 
 interface InventoryFormProps {
@@ -61,7 +63,8 @@ export function InventoryForm({ action, defaults, submitLabel }: InventoryFormPr
         <Field label="Stock Number" name="stockNumber" defaultValue={defaults?.stockNumber} required />
         <Field label="VIN" name="vin" defaultValue={defaults?.vin} />
         <Field label="Year" name="year" type="number" defaultValue={defaults?.year} required />
-        <Field label="Make" name="make" defaultValue={defaults?.make} required />
+        <Field label="Make (manufacturer)" name="make" defaultValue={defaults?.make} placeholder="Forest River" required />
+        <Field label="Brand" name="brand" defaultValue={defaults?.brand} placeholder="Rockwood" required />
         <Field label="Model" name="model" defaultValue={defaults?.model} required />
         <Field label="Floorplan" name="floorplan" defaultValue={defaults?.floorplan} />
       </div>
@@ -156,6 +159,20 @@ export function InventoryForm({ action, defaults, submitLabel }: InventoryFormPr
         <Textarea id="description" name="description" rows={4} defaultValue={defaults?.description} />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="canonicalUrl">Source/canonical URL (optional)</Label>
+        <Input
+          id="canonicalUrl"
+          name="canonicalUrl"
+          type="url"
+          defaultValue={defaults?.canonicalUrl}
+          placeholder="https://yourdealership.com/inventory/this-rv"
+        />
+        <p className="text-xs text-muted-foreground">
+          The original listing on your own website, if you have one.
+        </p>
+      </div>
+
       {!state.ok && state.error && (
         <p role="alert" className="text-sm text-destructive">
           {state.error}
@@ -176,6 +193,7 @@ function Field({
   defaultValue,
   required,
   maxLength,
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -183,6 +201,7 @@ function Field({
   defaultValue?: string | number;
   required?: boolean;
   maxLength?: number;
+  placeholder?: string;
 }) {
   return (
     <div className="space-y-2">
@@ -194,6 +213,7 @@ function Field({
         defaultValue={defaultValue}
         required={required}
         maxLength={maxLength}
+        placeholder={placeholder}
       />
     </div>
   );

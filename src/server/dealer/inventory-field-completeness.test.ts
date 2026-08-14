@@ -66,6 +66,7 @@ function baseFormData(overrides: Record<string, string> = {}): FormData {
     stockNumber: `FC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     year: "2024",
     make: "Forest River",
+    brand: "Rockwood",
     model: "Rockwood",
     rvType: "travel_trailer",
     condition: "new",
@@ -77,6 +78,7 @@ function baseFormData(overrides: Record<string, string> = {}): FormData {
     bedConfiguration: "Queen + Bunks",
     exteriorColor: "Alpine White",
     interior: "Beige",
+    canonicalUrl: "https://example-dealer.test/inventory/fc-1",
   };
   for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
     fd.set(key, value);
@@ -96,6 +98,12 @@ describe("createInventory persists the full field set", () => {
     expect(row.hitchWeightLbs).toBe(650);
     expect(row.bedConfiguration).toBe("Queen + Bunks");
     expect(row.interior).toBe("Beige");
+    // Gap 10: brand is distinct from both make (manufacturer) and model,
+    // and canonicalUrl (the dealer's own listing URL) actually persists -
+    // both existed as columns before this gap but neither was ever wired
+    // through the manual dealer form.
+    expect(row.brand).toBe("Rockwood");
+    expect(row.canonicalUrl).toBe("https://example-dealer.test/inventory/fc-1");
   });
 });
 
@@ -128,10 +136,10 @@ describe("updateInventory persists the full field set", () => {
 });
 
 describe("CSV import persists the full field set", () => {
-  it("saves width_inches/height_inches/hitch_weight_lbs/bed_configuration/interior from a CSV row", async () => {
+  it("saves width_inches/height_inches/hitch_weight_lbs/bed_configuration/interior/brand/canonical_url from a CSV row", async () => {
     const csv = [
-      "stock_number,year,make,model,rv_type,condition,sale_price,width_inches,height_inches,hitch_weight_lbs,bed_configuration,interior",
-      `FC-CSV-${Date.now()},2024,Keystone,Montana,fifth_wheel,new,55000,101,133,1200,King,Slate`,
+      "stock_number,year,make,brand,model,rv_type,condition,sale_price,width_inches,height_inches,hitch_weight_lbs,bed_configuration,interior,canonical_url",
+      `FC-CSV-${Date.now()},2024,Keystone,Montana,Montana High Country,fifth_wheel,new,55000,101,133,1200,King,Slate,https://example-dealer.test/montana`,
     ].join("\n");
     const file = new File([csv], "import.csv", { type: "text/csv" });
     const fd = new FormData();
@@ -144,11 +152,13 @@ describe("CSV import persists the full field set", () => {
     const [csvRow] = await db
       .select()
       .from(inventory)
-      .where(and(eq(inventory.dealershipId, dealershipId), eq(inventory.model, "Montana")));
+      .where(and(eq(inventory.dealershipId, dealershipId), eq(inventory.model, "Montana High Country")));
     expect(csvRow.widthInches).toBe(101);
     expect(csvRow.heightInches).toBe(133);
     expect(csvRow.hitchWeightLbs).toBe(1200);
     expect(csvRow.bedConfiguration).toBe("King");
     expect(csvRow.interior).toBe("Slate");
+    expect(csvRow.brand).toBe("Montana");
+    expect(csvRow.canonicalUrl).toBe("https://example-dealer.test/montana");
   });
 });

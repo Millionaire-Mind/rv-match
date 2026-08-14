@@ -22,6 +22,8 @@ Mirrored types for the app live in `src/server/db/schema.ts` (Drizzle).
 ## Dealerships
 
 - **dealerships** — application → `pending` → admin approval → `approved`.
+  `website`/`facebook_url`/`instagram_url` are all optional, validated as
+  URLs when present, captured at application time.
 - **dealership_users** — membership + role (`owner` | `staff`) linking a
   `profiles` row to a `dealerships` row.
 - **dealer_pilots** — one row per dealership. Free for `trial_days` (default
@@ -44,11 +46,17 @@ Mirrored types for the app live in `src/server/db/schema.ts` (Drizzle).
 
 ## Inventory
 
-- **inventory** — the RV listing itself: identity (year/make/model/
+- **inventory** — the RV listing itself: identity (year/make/**brand**/model/
   floorplan/VIN/stock number), pricing (MSRP/sale/advertised, all in
   cents), dimensions/weights, `bunkhouse`/`toy_hauler`/`outdoor_kitchen`
   flags, `status` (`draft`/`published`/`sold`/`archived`),
-  `primary_photo_id` / `primary_video_id`.
+  `primary_photo_id` / `primary_video_id`, `canonical_url` (the dealer's
+  own listing page, if any). `make` is the manufacturer (e.g. "Forest
+  River"); `brand` is the RV's brand/product line (e.g. "Rockwood") — a
+  distinct field from `model` added in the gap-closure pass, nullable at
+  the DB level (backfilled from the pre-existing `model` value for every
+  row that predates it) but required by the manual dealer form and
+  validated by CSV/feed import.
 - **inventory_features** — free-text feature tags (`(inventory_id,
   feature)` unique).
 - **inventory_photos** — ordered photo URLs.

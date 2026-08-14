@@ -47,6 +47,7 @@ export function attributesForInventory(rv: InventoryRow): PreferenceAttribute[] 
     { attribute: "dealer", value: rv.dealershipId },
   ];
 
+  if (rv.brand) attrs.push({ attribute: "brand", value: rv.brand });
   if (rv.floorplan) attrs.push({ attribute: "floorplan", value: rv.floorplan });
 
   const lb = lengthBand(rv.lengthInches);

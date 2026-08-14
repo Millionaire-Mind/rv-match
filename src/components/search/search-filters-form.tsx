@@ -66,8 +66,12 @@ export function SearchFiltersForm() {
           <Input id="make" name="make" defaultValue={searchParams.get("make") ?? ""} placeholder="Forest River" />
         </div>
         <div>
+          <Label htmlFor="brand">Brand</Label>
+          <Input id="brand" name="brand" defaultValue={searchParams.get("brand") ?? ""} placeholder="Rockwood" />
+        </div>
+        <div>
           <Label htmlFor="model">Model</Label>
-          <Input id="model" name="model" defaultValue={searchParams.get("model") ?? ""} placeholder="Rockwood" />
+          <Input id="model" name="model" defaultValue={searchParams.get("model") ?? ""} />
         </div>
         <div>
           <Label htmlFor="condition">Condition</Label>

@@ -117,8 +117,8 @@ describe("importInventoryCsv warnings channel", () => {
   it("produces no warnings for a fully-specified row", async () => {
     const stockNumber = `WARN-CLEAN-${Date.now()}`;
     const csv = [
-      "stock_number,year,make,model,rv_type,condition,sale_price,zip_code,msrp,features",
-      `${stockNumber},2024,Forest River,Rockwood,travel_trailer,new,35000,80202,38000,Solar Prep`,
+      "stock_number,year,make,brand,model,rv_type,condition,sale_price,zip_code,msrp,features",
+      `${stockNumber},2024,Forest River,Rockwood,Rockwood Mini Lite,travel_trailer,new,35000,80202,38000,Solar Prep`,
     ].join("\n");
     const file = new File([csv], "import.csv", { type: "text/csv" });
     const fd = new FormData();

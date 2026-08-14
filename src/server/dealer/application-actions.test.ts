@@ -75,3 +75,52 @@ describe("submitDealerApplication rate limiting", () => {
     expect(blocked).toEqual({ ok: false, error: "Too many applications submitted. Please try again later." });
   });
 });
+
+describe("submitDealerApplication social-profile URLs (Gap 10)", () => {
+  it("persists optional Facebook/Instagram URLs alongside website when provided", async () => {
+    realIpHeader = `203.0.113.${(suffix + 50) % 200}`;
+    const email = `dealer-apply-social-${suffix}@example.com`;
+    const result = await submitDealerApplication(
+      { ok: false, error: "" },
+      formData({
+        email,
+        website: "https://example-dealer.test",
+        facebookUrl: "https://facebook.com/exampledealer",
+        instagramUrl: "https://instagram.com/exampledealer",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const [dealership] = await db.select().from(dealerships).where(eq(dealerships.primaryContactEmail, email));
+    expect(dealership.facebookUrl).toBe("https://facebook.com/exampledealer");
+    expect(dealership.instagramUrl).toBe("https://instagram.com/exampledealer");
+
+    const [user] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
+    if (user) createdUserIds.push(user.id);
+    createdDealershipIds.push(dealership.id);
+  });
+
+  it("leaves social URLs null when not provided - never mandatory", async () => {
+    realIpHeader = `203.0.113.${(suffix + 51) % 200}`;
+    const email = `dealer-apply-nosocial-${suffix}@example.com`;
+    const result = await submitDealerApplication({ ok: false, error: "" }, formData({ email }));
+    expect(result.ok).toBe(true);
+
+    const [dealership] = await db.select().from(dealerships).where(eq(dealerships.primaryContactEmail, email));
+    expect(dealership.facebookUrl).toBeNull();
+    expect(dealership.instagramUrl).toBeNull();
+
+    const [user] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
+    if (user) createdUserIds.push(user.id);
+    createdDealershipIds.push(dealership.id);
+  });
+
+  it("rejects a malformed Facebook URL", async () => {
+    realIpHeader = `203.0.113.${(suffix + 52) % 200}`;
+    const result = await submitDealerApplication(
+      { ok: false, error: "" },
+      formData({ email: `dealer-apply-badsocial-${suffix}@example.com`, facebookUrl: "not-a-url" }),
+    );
+    expect(result.ok).toBe(false);
+  });
+});

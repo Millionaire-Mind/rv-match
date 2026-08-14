@@ -40,6 +40,10 @@ function computeRowWarnings(row: CsvRowInput, geo: { lat: string | null; lng: st
     warnings.push("No MSRP provided — savings-vs-MSRP messaging won't show for this RV.");
   }
 
+  if (!row.brand) {
+    warnings.push("No brand provided — this RV's brand/product line won't show in search or matching.");
+  }
+
   if (isNewRow && !row.features) {
     warnings.push("No features listed for this new RV.");
   }
@@ -66,6 +70,7 @@ export async function upsertInventoryRow(
     vin: row.vin,
     year: row.year,
     make: row.make,
+    brand: row.brand,
     model: row.model,
     floorplan: row.floorplan,
     rvType: row.rv_type,
@@ -93,6 +98,7 @@ export async function upsertInventoryRow(
     zipCode: row.zip_code,
     lat: geo.lat,
     lng: geo.lng,
+    canonicalUrl: row.canonical_url || null,
   };
 
   const result = await db.transaction(async (tx) => {

@@ -11,6 +11,7 @@ export const CANONICAL_FEED_FIELDS = [
   "vin",
   "year",
   "make",
+  "brand",
   "model",
   "floorplan",
   "rv_type",
@@ -37,6 +38,7 @@ export const CANONICAL_FEED_FIELDS = [
   "state",
   "zip_code",
   "features",
+  "canonical_url",
 ] as const;
 
 /** Walks a dot-separated path ("Inventory.Vehicle") into a parsed JSON/XML object to find the array of per-vehicle records. */

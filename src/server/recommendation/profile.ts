@@ -15,6 +15,7 @@ export interface PreferenceHighlight {
 export const ATTRIBUTE_LABELS: Record<string, (value: string) => string> = {
   rv_type: (v) => rvTypeLabels[v as RvType] ?? v,
   make: (v) => v,
+  brand: (v) => v,
   bunkhouse: () => "Bunkhouse",
   outdoor_kitchen: () => "Outdoor Kitchen",
   toy_hauler: () => "Toy Hauler",

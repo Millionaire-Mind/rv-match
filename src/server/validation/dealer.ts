@@ -11,6 +11,8 @@ export const dealerApplicationSchema = z
     zipCode: z.string().trim().regex(/^\d{5}$/, "Enter a 5-digit ZIP code."),
     phone: z.string().trim().min(7, "Phone number is required.").max(30),
     website: z.union([z.string().trim().url("Enter a valid URL."), z.literal("")]).optional(),
+    facebookUrl: z.union([z.string().trim().url("Enter a valid Facebook URL."), z.literal("")]).optional(),
+    instagramUrl: z.union([z.string().trim().url("Enter a valid Instagram URL."), z.literal("")]).optional(),
     primaryContactName: z.string().trim().min(1, "Contact name is required.").max(200),
     inventorySizeEstimate: z.coerce.number().int().nonnegative().max(100_000).optional(),
     email: emailSchema,

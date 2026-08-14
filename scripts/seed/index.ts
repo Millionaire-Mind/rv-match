@@ -178,6 +178,10 @@ async function main() {
           stockNumber: entry.stockNumber,
           year: entry.year,
           make: entry.make,
+          // The seed catalog's "model" field has always actually held the
+          // RV's brand/product line (e.g. "Rockwood") rather than a
+          // distinct model designation - see catalog.ts's own entries.
+          brand: entry.model,
           model: entry.model,
           floorplan: entry.floorplan,
           rvType: entry.rvType,

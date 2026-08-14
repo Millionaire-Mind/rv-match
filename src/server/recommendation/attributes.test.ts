@@ -10,7 +10,8 @@ function makeRv(overrides: Partial<InventoryRow>): InventoryRow {
     vin: null,
     year: 2024,
     make: "Forest River",
-    model: "Rockwood",
+    brand: "Rockwood",
+    model: "Rockwood Mini Lite",
     floorplan: "2715S",
     rvType: "travel_trailer",
     condition: "new",
@@ -56,9 +57,15 @@ describe("attributesForInventory", () => {
     const keys = attrs.map((a) => a.attribute);
     expect(keys).toContain("rv_type");
     expect(keys).toContain("make");
+    expect(keys).toContain("brand");
     expect(keys).toContain("condition");
     expect(keys).toContain("price_band");
     expect(keys).toContain("dealer");
+  });
+
+  it("omits the brand attribute when brand is null", () => {
+    const attrs = attributesForInventory(makeRv({ brand: null }));
+    expect(attrs.map((a) => a.attribute)).not.toContain("brand");
   });
 
   it("uses the advertised price over sale price for the price band when present", () => {

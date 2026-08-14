@@ -122,6 +122,7 @@ function inventoryForm(): FormData {
   fd.set("stockNumber", `RBAC-CREATE-${Date.now()}`);
   fd.set("year", "2024");
   fd.set("make", "Test");
+  fd.set("brand", "Test Brand");
   fd.set("model", "Model");
   fd.set("rvType", "travel_trailer");
   fd.set("condition", "new");

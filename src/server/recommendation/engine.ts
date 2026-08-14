@@ -167,6 +167,8 @@ export function explainAttribute(attribute: string, value: string): string {
       return "You've responded well to toy haulers";
     case "make":
       return `You like ${value}`;
+    case "brand":
+      return `You like ${value}`;
     case "price_band":
       return "Matches your typical price range";
     default:

@@ -51,7 +51,8 @@ beforeAll(async () => {
       stockNumber: `SRCH-BUNK-${suffix}`,
       year: 2024,
       make: "Forest River",
-      model: "Rockwood",
+      brand: "Rockwood",
+      model: "Rockwood Mini Lite",
       rvType: "travel_trailer",
       condition: "new",
       salePriceCents: 3000000,
@@ -72,7 +73,8 @@ beforeAll(async () => {
       stockNumber: `SRCH-PLAIN-${suffix}`,
       year: 2022,
       make: "Jayco",
-      model: "Jay Flight",
+      brand: "Jay Flight",
+      model: "Jay Flight SLX",
       rvType: "travel_trailer",
       condition: "used",
       salePriceCents: 1500000,
@@ -151,6 +153,16 @@ describe("searchInventory filters", () => {
     const { results } = await searchInventory({ sort: "newest", bunkhouse: true, dealershipId });
     expect(results.map((r) => r.id)).toContain(ids.bunkhouseTT);
     expect(results.map((r) => r.id)).not.toContain(ids.plainTT);
+  });
+
+  it("filters by brand (Gap 10: distinct from make/manufacturer)", async () => {
+    const { results } = await searchInventory({ sort: "newest", brand: "Rockwood", dealershipId });
+    const foundIds = results.map((r) => r.id);
+    expect(foundIds).toContain(ids.bunkhouseTT);
+    expect(foundIds).not.toContain(ids.plainTT);
+    const found = results.find((r) => r.id === ids.bunkhouseTT);
+    expect(found?.brand).toBe("Rockwood");
+    expect(found?.model).toBe("Rockwood Mini Lite");
   });
 
   it("filters by price range", async () => {

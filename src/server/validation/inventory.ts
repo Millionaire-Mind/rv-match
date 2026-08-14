@@ -38,6 +38,7 @@ export const inventoryFormSchema = z.object({
   vin: z.string().trim().max(32).optional(),
   year: z.coerce.number().int().min(1980).max(2100),
   make: z.string().trim().min(1, "Make is required.").max(100),
+  brand: z.string().trim().min(1, "Brand is required.").max(100),
   model: z.string().trim().min(1, "Model is required.").max(100),
   floorplan: z.string().trim().max(100).optional(),
   rvType: rvTypeSchema,
@@ -64,6 +65,7 @@ export const inventoryFormSchema = z.object({
   state: z.string().trim().max(2).optional(),
   zipCode: z.string().trim().max(10).optional(),
   features: z.string().trim().max(2000).optional(), // comma-separated in the form
+  canonicalUrl: z.union([z.string().trim().url("Enter a valid URL."), z.literal("")]).optional(),
 });
 
 export type InventoryFormInput = z.infer<typeof inventoryFormSchema>;
@@ -73,6 +75,11 @@ export const csvRowSchema = z.object({
   vin: z.string().trim().optional(),
   year: z.coerce.number().int().min(1980).max(2100),
   make: z.string().trim().min(1),
+  // Optional here (unlike the manual dealer form) so a bulk CSV/feed
+  // import from a dealer whose source system doesn't yet map a brand
+  // column still succeeds - Gap 7's warnings channel flags its absence
+  // as a non-fatal "missing optional field" warning instead.
+  brand: z.string().trim().optional(),
   model: z.string().trim().min(1),
   floorplan: z.string().trim().optional(),
   rv_type: rvTypeSchema,
@@ -99,6 +106,7 @@ export const csvRowSchema = z.object({
   state: z.string().trim().optional(),
   zip_code: z.string().trim().optional(),
   features: z.string().trim().optional(),
+  canonical_url: z.string().trim().optional(),
 });
 
 export type CsvRowInput = z.infer<typeof csvRowSchema>;
@@ -118,6 +126,7 @@ export const CSV_TEMPLATE_HEADERS = [
   "vin",
   "year",
   "make",
+  "brand",
   "model",
   "floorplan",
   "rv_type",
@@ -144,4 +153,5 @@ export const CSV_TEMPLATE_HEADERS = [
   "state",
   "zip_code",
   "features",
+  "canonical_url",
 ] as const;

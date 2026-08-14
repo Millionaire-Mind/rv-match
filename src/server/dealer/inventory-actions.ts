@@ -59,6 +59,7 @@ function parseInventoryForm(formData: FormData) {
     vin: formData.get("vin") || undefined,
     year: formData.get("year"),
     make: formData.get("make"),
+    brand: formData.get("brand"),
     model: formData.get("model"),
     floorplan: formData.get("floorplan") || undefined,
     rvType: formData.get("rvType"),
@@ -85,6 +86,7 @@ function parseInventoryForm(formData: FormData) {
     state: formData.get("state") || undefined,
     zipCode: formData.get("zipCode") || undefined,
     features: formData.get("features") || undefined,
+    canonicalUrl: formData.get("canonicalUrl") || undefined,
   });
 }
 
@@ -114,6 +116,7 @@ export async function createInventory(
       vin: d.vin,
       year: d.year,
       make: d.make,
+      brand: d.brand,
       model: d.model,
       floorplan: d.floorplan,
       rvType: d.rvType,
@@ -141,6 +144,7 @@ export async function createInventory(
       zipCode: d.zipCode,
       lat: geo.lat,
       lng: geo.lng,
+      canonicalUrl: d.canonicalUrl || null,
       status: "draft",
       source: "manual",
     })
@@ -215,6 +219,7 @@ export async function updateInventory(
       vin: d.vin,
       year: d.year,
       make: d.make,
+      brand: d.brand,
       model: d.model,
       floorplan: d.floorplan,
       rvType: d.rvType,
@@ -242,6 +247,7 @@ export async function updateInventory(
       zipCode: d.zipCode,
       lat: geo.lat,
       lng: geo.lng,
+      canonicalUrl: d.canonicalUrl || null,
     })
     .where(eq(inventory.id, inventoryId));
 

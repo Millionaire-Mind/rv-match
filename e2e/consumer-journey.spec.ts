@@ -2,10 +2,19 @@ import { test, expect, type Page } from "@playwright/test";
 
 const DEMO_PASSWORD = "RvMatchDemo123!";
 
+// A swipe only advances the feed once the server confirms it persisted
+// (see the Gap 1 gap-closure pass), so each keypress must wait for genuine
+// confirmed advancement - a fixed short delay would race real persistence
+// latency and silently drop keypresses the in-flight guard rejects.
 async function swipeTimes(page: Page, count: number, key: "ArrowRight" | "ArrowLeft" | "ArrowUp") {
   for (let i = 0; i < count; i++) {
+    const before = await page.locator("h2").first().textContent();
     await page.keyboard.press(key);
-    await page.waitForTimeout(150);
+    await page.waitForFunction(
+      (prevText) => document.querySelector("h2")?.textContent !== prevText,
+      before,
+      { timeout: 10000 },
+    );
   }
 }
 

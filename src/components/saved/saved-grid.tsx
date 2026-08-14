@@ -6,18 +6,32 @@ import { PlayCircle, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InlineError } from "@/components/ui/inline-error";
 import { formatCurrency } from "@/lib/utils";
 import { showMeSimilarRvs, toggleSaveInventory } from "@/server/discovery/actions";
 import type { SavedCardData } from "@/server/inventory/saved";
 
 export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
   const [items, setItems] = useState(initialItems);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [errorId, setErrorId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  // Only actually removes the card from the grid once the server confirms
+  // the unsave persisted - a failed request must not make an RV silently
+  // disappear from Saved while it's actually still saved server-side.
   function remove(inventoryId: string) {
-    setItems((prev) => prev.filter((i) => i.inventoryId !== inventoryId));
+    setRemovingId(inventoryId);
+    setErrorId(null);
     startTransition(async () => {
-      await toggleSaveInventory(inventoryId, false);
+      try {
+        await toggleSaveInventory(inventoryId, false);
+        setItems((prev) => prev.filter((i) => i.inventoryId !== inventoryId));
+      } catch {
+        setErrorId(inventoryId);
+      } finally {
+        setRemovingId(null);
+      }
     });
   }
 
@@ -53,7 +67,8 @@ export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
               type="button"
               onClick={() => remove(item.inventoryId)}
               aria-label="Remove from saved"
-              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+              disabled={removingId === item.inventoryId}
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-60"
             >
               <X className="h-4 w-4" />
             </button>
@@ -101,6 +116,14 @@ export function SavedGrid({ initialItems }: { initialItems: SavedCardData[] }) {
                 </Button>
               )}
             </div>
+            {errorId === item.inventoryId && (
+              <InlineError
+                message="Couldn't remove this RV - try again."
+                onRetry={() => remove(item.inventoryId)}
+                retrying={removingId === item.inventoryId}
+                className="mt-2"
+              />
+            )}
           </div>
         </div>
       ))}

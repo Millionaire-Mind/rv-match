@@ -1,5 +1,6 @@
 "use client";
 
+import { forwardRef, useImperativeHandle } from "react";
 import Link from "next/link";
 import { motion, useAnimation, type PanInfo } from "framer-motion";
 import { ChevronUp, MapPin } from "lucide-react";
@@ -9,6 +10,8 @@ import { formatCurrency, formatDistance } from "@/lib/utils";
 import type { DiscoveryCardDTO } from "@/server/discovery/dto";
 import { VideoPlayer, type VideoMilestone, type VideoWatchProgress } from "./video-player";
 
+export type SwipeDecision = "pass" | "like" | "love" | "more_like_this";
+
 interface DiscoveryCardProps {
   card: DiscoveryCardDTO;
   active: boolean;
@@ -16,17 +19,56 @@ interface DiscoveryCardProps {
   onMilestone: (milestone: VideoMilestone, progress?: VideoWatchProgress) => void;
 }
 
+/**
+ * Imperative handle so the parent (DiscoveryFeed) - which owns whether a
+ * swipe actually persisted - can drive this card's exit/rollback animation
+ * regardless of whether the swipe originated from a drag gesture or a
+ * button tap. This keeps "does the card actually leave" tied to real
+ * persistence success rather than to the animation itself.
+ */
+export interface DiscoveryCardHandle {
+  playExit(decision: SwipeDecision): void;
+  resetPosition(): void;
+}
+
 const SWIPE_THRESHOLD = 120;
 
-export function DiscoveryCard({ card, active, onDecision, onMilestone }: DiscoveryCardProps) {
+export const DiscoveryCard = forwardRef<DiscoveryCardHandle, DiscoveryCardProps>(function DiscoveryCard(
+  { card, active, onDecision, onMilestone },
+  ref,
+) {
   const controls = useAnimation();
+
+  function playExit(decision: SwipeDecision) {
+    if (decision === "like") {
+      controls.start({ x: 500, opacity: 0, rotate: 15, transition: { duration: 0.25 } });
+    } else if (decision === "pass") {
+      controls.start({ x: -500, opacity: 0, rotate: -15, transition: { duration: 0.25 } });
+    } else if (decision === "love") {
+      controls.start({ y: -500, opacity: 0, transition: { duration: 0.25 } });
+    } else {
+      controls.start({ opacity: 0, scale: 0.96, transition: { duration: 0.2 } });
+    }
+  }
+
+  useImperativeHandle(ref, () => ({
+    playExit,
+    resetPosition() {
+      controls.start({
+        x: 0,
+        y: 0,
+        opacity: 1,
+        scale: 1,
+        rotate: 0,
+        transition: { type: "spring", stiffness: 400, damping: 30 },
+      });
+    },
+  }));
 
   function handleDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.x > SWIPE_THRESHOLD) {
-      controls.start({ x: 500, opacity: 0, rotate: 15, transition: { duration: 0.25 } });
       onDecision("like");
     } else if (info.offset.x < -SWIPE_THRESHOLD) {
-      controls.start({ x: -500, opacity: 0, rotate: -15, transition: { duration: 0.25 } });
       onDecision("pass");
     } else {
       controls.start({ x: 0, rotate: 0, transition: { type: "spring", stiffness: 400, damping: 30 } });
@@ -96,4 +138,4 @@ export function DiscoveryCard({ card, active, onDecision, onMilestone }: Discove
       </div>
     </motion.article>
   );
-}
+});

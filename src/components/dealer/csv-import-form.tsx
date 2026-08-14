@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { importInventoryCsv, type CsvImportReport } from "@/server/dealer/csv-import";
@@ -43,10 +43,11 @@ export function CsvImportForm({ dealershipId }: { dealershipId: string }) {
 
       {report && (
         <div className="space-y-3">
-          <div className="flex gap-4 text-sm">
+          <div className="flex flex-wrap gap-4 text-sm">
             <span className="text-muted-foreground">{report.totalRows} rows</span>
             <span className="text-success">{report.created} created</span>
             <span className="text-accent">{report.updated} updated</span>
+            <span className="text-amber-600">{report.warnings} with warnings</span>
             <span className="text-destructive">{report.errors} errors</span>
           </div>
           {report.rows.length > 0 && (
@@ -70,9 +71,16 @@ export function CsvImportForm({ dealershipId }: { dealershipId: string }) {
                             <XCircle className="h-3.5 w-3.5" /> {r.message}
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 text-success capitalize">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> {r.status}
-                          </span>
+                          <div className="space-y-1">
+                            <span className="flex items-center gap-1 text-success capitalize">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> {r.status}
+                            </span>
+                            {r.warnings.map((w, i) => (
+                              <span key={i} className="flex items-start gap-1 text-xs text-amber-600">
+                                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> {w}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </td>
                     </tr>

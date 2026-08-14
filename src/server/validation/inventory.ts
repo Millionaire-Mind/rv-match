@@ -10,10 +10,28 @@ import { rvConditionSchema, rvTypeSchema } from "./enums";
  * recognizable truthy tokens count as true; everything else (including a
  * blank cell) is false.
  */
+const TRUTHY_TOKENS = ["true", "1", "yes", "y"];
+const FALSY_TOKENS = ["false", "0", "no", "n"];
+
 const csvBooleanSchema = z
   .string()
-  .transform((v) => ["true", "1", "yes", "y"].includes(v.trim().toLowerCase()))
+  .transform((v) => TRUTHY_TOKENS.includes(v.trim().toLowerCase()))
   .optional();
+
+/**
+ * Gap 7: a boolean-ish CSV/feed cell (bunkhouse/toy_hauler/outdoor_kitchen)
+ * that's non-blank but neither a recognized truthy nor falsy token (e.g. a
+ * dealer feed writing "TBD" or "call for details") silently becomes false
+ * via csvBooleanSchema above - correct for import to keep proceeding, but
+ * worth surfacing as a non-fatal warning rather than a silent data loss.
+ */
+export function unrecognizedBooleanWarning(column: string, rawValue: string | undefined): string | null {
+  if (!rawValue) return null;
+  const normalized = rawValue.trim().toLowerCase();
+  if (!normalized) return null;
+  if (TRUTHY_TOKENS.includes(normalized) || FALSY_TOKENS.includes(normalized)) return null;
+  return `Unrecognized value "${rawValue}" for "${column}" — treated as No. Use true/false, yes/no, 1/0, or y/n.`;
+}
 
 export const inventoryFormSchema = z.object({
   stockNumber: z.string().trim().min(1, "Stock number is required.").max(64),

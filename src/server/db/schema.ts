@@ -380,6 +380,10 @@ export const inventoryFeedRuns = pgTable("inventory_feed_runs", {
   rowsUpdated: integer("rows_updated").notNull().default(0),
   rowsFailed: integer("rows_failed").notNull().default(0),
   errors: jsonb("errors").notNull().default([]),
+  // Gap 7: non-fatal warnings channel, distinct from the fatal `errors`
+  // above - a row that trips a warning still imported successfully.
+  rowsWithWarnings: integer("rows_with_warnings").notNull().default(0),
+  warnings: jsonb("warnings").notNull().default([]),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });

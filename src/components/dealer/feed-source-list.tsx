@@ -31,7 +31,7 @@ export function FeedSourceList({ dealershipId, sources }: { dealershipId: string
       const summary = await runFeedSourceNow(dealershipId, id);
       setRunResult({
         id,
-        summary: `${summary.status}: ${summary.rowsCreated} created, ${summary.rowsUpdated} updated, ${summary.rowsFailed} failed`,
+        summary: `${summary.status}: ${summary.rowsCreated} created, ${summary.rowsUpdated} updated, ${summary.rowsWithWarnings} with warnings, ${summary.rowsFailed} failed`,
       });
       setRunningId(null);
       router.refresh();

@@ -3,6 +3,7 @@ import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { inventoryFeedRuns, inventoryFeedSources } from "@/server/db/schema";
 import { upsertInventoryRow } from "@/server/dealer/inventory-upsert";
+import { unrecognizedBooleanWarning } from "@/server/validation/inventory";
 import { fetchFeedText } from "./fetch-feed";
 import { applyFieldMapping, parseFeedText, validateMappedRows, type FeedFormat } from "./parse";
 import { logError } from "@/server/logging/log";
@@ -14,8 +15,14 @@ export interface FeedRunSummary {
   rowsCreated: number;
   rowsUpdated: number;
   rowsFailed: number;
+  /** Count of rows that imported successfully but with at least one non-fatal warning (Gap 7). */
+  rowsWithWarnings: number;
   errors: string[];
+  /** Non-fatal, per-row warnings - distinct from `errors`, which are fatal/rejected rows. */
+  warnings: string[];
 }
+
+const MAX_STORED_WARNINGS = 50;
 
 const MAX_STORED_ERRORS = 50;
 
@@ -40,10 +47,12 @@ export async function runFeedImport(feedSourceId: string): Promise<FeedRunSummar
     .returning({ id: inventoryFeedRuns.id });
 
   const errors: string[] = [];
+  const warnings: string[] = [];
   let rowsProcessed = 0;
   let rowsCreated = 0;
   let rowsUpdated = 0;
   let rowsFailed = 0;
+  let rowsWithWarnings = 0;
   let finalStatus: "succeeded" | "failed" = "succeeded";
 
   try {
@@ -66,6 +75,19 @@ export async function runFeedImport(feedSourceId: string): Promise<FeedRunSummar
         const result = await upsertInventoryRow(source.dealershipId, row.data, "feed_import");
         if (result.action === "created") rowsCreated += 1;
         else rowsUpdated += 1;
+
+        const rowWarnings = [
+          ...result.warnings,
+          unrecognizedBooleanWarning("bunkhouse", row.canonical.bunkhouse),
+          unrecognizedBooleanWarning("toy_hauler", row.canonical.toy_hauler),
+          unrecognizedBooleanWarning("outdoor_kitchen", row.canonical.outdoor_kitchen),
+        ].filter((w): w is string => w !== null);
+        if (rowWarnings.length > 0) {
+          rowsWithWarnings += 1;
+          if (warnings.length < MAX_STORED_WARNINGS) {
+            warnings.push(`${row.data.stock_number}: ${rowWarnings.join(" ")}`);
+          }
+        }
       } catch (err) {
         logError("dealer.feed_import.row", err, { feedSourceId, stockNumber: row.data.stock_number });
         rowsFailed += 1;
@@ -95,7 +117,9 @@ export async function runFeedImport(feedSourceId: string): Promise<FeedRunSummar
       rowsCreated,
       rowsUpdated,
       rowsFailed,
+      rowsWithWarnings,
       errors,
+      warnings,
       completedAt: new Date(),
     })
     .where(eq(inventoryFeedRuns.id, run.id));
@@ -112,7 +136,9 @@ export async function runFeedImport(feedSourceId: string): Promise<FeedRunSummar
     rowsCreated,
     rowsUpdated,
     rowsFailed,
+    rowsWithWarnings,
     errors,
+    warnings,
   };
 }
 

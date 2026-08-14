@@ -174,6 +174,27 @@ describe("runFeedImport", () => {
   });
 });
 
+describe("runFeedImport warnings channel (Gap 7)", () => {
+  it("flags a row missing a ZIP code and an unrecognized boolean token as non-fatal warnings, and still imports it", async () => {
+    const suffix = Date.now();
+    fetchFeedTextMock.mockResolvedValue(
+      `stock_number,year,make,model,rv_type,condition,sale_price,toy_hauler\nFEED-WARN-${suffix},2024,Forest River,Rockwood,travel_trailer,new,35000,call for details`,
+    );
+    const source = await makeFeedSource();
+
+    const summary = await runFeedImport(source.id);
+    expect(summary.status).toBe("succeeded");
+    expect(summary.rowsCreated).toBe(1);
+    expect(summary.rowsWithWarnings).toBe(1);
+    expect(summary.warnings[0]).toContain(`FEED-WARN-${suffix}`);
+    expect(summary.warnings[0]).toContain("toy_hauler");
+
+    const [run] = await db.select().from(inventoryFeedRuns).where(eq(inventoryFeedRuns.feedSourceId, source.id));
+    expect(run.rowsWithWarnings).toBe(1);
+    expect((run.warnings as string[]).length).toBe(1);
+  });
+});
+
 describe("processDueFeedSources", () => {
   it("runs an active source with no prior run and a refresh interval set", async () => {
     fetchFeedTextMock.mockResolvedValue(

@@ -126,6 +126,7 @@ export function applyFieldMapping(
 
 export interface FeedRowValidation {
   raw: Record<string, string>;
+  canonical: Record<string, string>;
   valid: boolean;
   data?: CsvRowInput;
   errors?: string;
@@ -134,9 +135,10 @@ export interface FeedRowValidation {
 export function validateMappedRows(rows: MappedRow[]): FeedRowValidation[] {
   return rows.map(({ raw, canonical }) => {
     const parsed = csvRowSchema.safeParse(canonical);
-    if (parsed.success) return { raw, valid: true, data: parsed.data };
+    if (parsed.success) return { raw, canonical, valid: true, data: parsed.data };
     return {
       raw,
+      canonical,
       valid: false,
       errors: parsed.error.issues.map((iss) => `${iss.path.join(".")}: ${iss.message}`).join("; "),
     };

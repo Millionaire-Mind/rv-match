@@ -17,6 +17,34 @@ function geocodeForZip(zipCode: string | undefined): { lat: string | null; lng: 
 export interface UpsertInventoryResult {
   action: "created" | "updated";
   id: string;
+  /** Non-fatal issues worth a dealer's attention - the row still imported successfully. */
+  warnings: string[];
+}
+
+/**
+ * Non-fatal, informational issues distinct from the fatal validation
+ * errors csvRowSchema already rejects rows for (Gap 7). Every check here
+ * is grounded in a real functional consequence, not a fabricated
+ * completeness score - a row that trips one of these still imports.
+ */
+function computeRowWarnings(row: CsvRowInput, geo: { lat: string | null; lng: string | null }, isNewRow: boolean): string[] {
+  const warnings: string[] = [];
+
+  if (!row.zip_code) {
+    warnings.push("No ZIP code provided — this RV won't appear in location-based search results until one is added.");
+  } else if (!geo.lat) {
+    warnings.push(`ZIP code "${row.zip_code}" could not be located — coordinates unavailable, so this RV won't appear in location-based search results.`);
+  }
+
+  if (row.msrp === undefined) {
+    warnings.push("No MSRP provided — savings-vs-MSRP messaging won't show for this RV.");
+  }
+
+  if (isNewRow && !row.features) {
+    warnings.push("No features listed for this new RV.");
+  }
+
+  return warnings;
 }
 
 /**
@@ -102,7 +130,7 @@ export async function upsertInventoryRow(
     await notifyPriceDropForSavers(result.id, result.oldPriceCents, salePriceCents, `${row.year} ${row.make} ${row.model}`);
   }
 
-  return { action: result.action, id: result.id };
+  return { action: result.action, id: result.id, warnings: computeRowWarnings(row, geo, result.action === "created") };
 }
 
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];

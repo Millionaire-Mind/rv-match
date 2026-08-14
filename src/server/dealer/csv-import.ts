@@ -4,7 +4,7 @@ import { parse } from "csv-parse/sync";
 
 import { requireDealerRole } from "@/server/auth/guards";
 import { MANAGEMENT_ROLES } from "@/server/dealer/permissions";
-import { csvRowSchema } from "@/server/validation/inventory";
+import { csvRowSchema, unrecognizedBooleanWarning } from "@/server/validation/inventory";
 import { upsertInventoryRow } from "@/server/dealer/inventory-upsert";
 import { logAudit } from "@/server/audit/log";
 import { logError } from "@/server/logging/log";
@@ -15,12 +15,16 @@ export interface CsvImportRowResult {
   stockNumber?: string;
   status: "created" | "updated" | "error";
   message?: string;
+  /** Non-fatal issues - the row still imported successfully. Empty when there are none. */
+  warnings: string[];
 }
 
 export interface CsvImportReport {
   totalRows: number;
   created: number;
   updated: number;
+  /** Count of rows that imported successfully but with at least one non-fatal warning. */
+  warnings: number;
   errors: number;
   rows: CsvImportRowResult[];
 }
@@ -33,7 +37,7 @@ export async function importInventoryCsv(
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { totalRows: 0, created: 0, updated: 0, errors: 0, rows: [] };
+    return { totalRows: 0, created: 0, updated: 0, warnings: 0, errors: 0, rows: [] };
   }
 
   const text = await file.text();
@@ -46,14 +50,16 @@ export async function importInventoryCsv(
       totalRows: 0,
       created: 0,
       updated: 0,
+      warnings: 0,
       errors: 1,
-      rows: [{ row: 0, status: "error", message: `Could not parse CSV: ${(err as Error).message}` }],
+      rows: [{ row: 0, status: "error", message: `Could not parse CSV: ${(err as Error).message}`, warnings: [] }],
     };
   }
 
   const results: CsvImportRowResult[] = [];
   let created = 0;
   let updated = 0;
+  let warningRows = 0;
   let errors = 0;
 
   for (let i = 0; i < records.length; i++) {
@@ -65,6 +71,7 @@ export async function importInventoryCsv(
         stockNumber: records[i].stock_number,
         status: "error",
         message: parsed.error.issues.map((iss) => `${iss.path.join(".")}: ${iss.message}`).join("; "),
+        warnings: [],
       });
       errors += 1;
       continue;
@@ -72,9 +79,16 @@ export async function importInventoryCsv(
 
     try {
       const result = await upsertInventoryRow(dealershipId, parsed.data, "csv_import");
-      results.push({ row: rowNumber, stockNumber: parsed.data.stock_number, status: result.action });
+      const rawWarnings = [
+        unrecognizedBooleanWarning("bunkhouse", records[i].bunkhouse),
+        unrecognizedBooleanWarning("toy_hauler", records[i].toy_hauler),
+        unrecognizedBooleanWarning("outdoor_kitchen", records[i].outdoor_kitchen),
+      ].filter((w): w is string => w !== null);
+      const warnings = [...result.warnings, ...rawWarnings];
+      results.push({ row: rowNumber, stockNumber: parsed.data.stock_number, status: result.action, warnings });
       if (result.action === "created") created += 1;
       else updated += 1;
+      if (warnings.length > 0) warningRows += 1;
     } catch (err) {
       logError("dealer.csv_import.row", err, { dealershipId, row: rowNumber });
       results.push({
@@ -82,6 +96,7 @@ export async function importInventoryCsv(
         stockNumber: parsed.data.stock_number,
         status: "error",
         message: err instanceof Error ? err.message : "Unknown error",
+        warnings: [],
       });
       errors += 1;
     }
@@ -92,10 +107,10 @@ export async function importInventoryCsv(
     entityType: "dealership",
     entityId: dealershipId,
     dealershipId,
-    metadata: { totalRows: records.length, created, updated, errors },
+    metadata: { totalRows: records.length, created, updated, warnings: warningRows, errors },
   });
 
   revalidatePath("/dealer/inventory");
 
-  return { totalRows: records.length, created, updated, errors, rows: results };
+  return { totalRows: records.length, created, updated, warnings: warningRows, errors, rows: results };
 }

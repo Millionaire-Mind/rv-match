@@ -5,8 +5,33 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
 import { anonymousSessions, consumerProfiles, profiles } from "@/server/db/schema";
-import { ANONYMOUS_COOKIE_NAME } from "./session-cookie";
+import { ANONYMOUS_COOKIE_NAME, PENDING_ATTRIBUTION_COOKIE_NAME } from "./session-cookie";
 import { authGetUserId } from "./provider";
+
+interface PendingAttribution {
+  source: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+}
+
+/** Reads the short-lived cookie middleware sets on a visitor's very first
+ * request when it carried UTM params or a third-party referrer (see
+ * src/proxy.ts's capturePendingAttribution) - the fallback attribution used
+ * below when no caller (e.g. /go/[code]) passed a more specific one. */
+async function readPendingAttribution(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+): Promise<PendingAttribution | null> {
+  const raw = cookieStore.get(PENDING_ATTRIBUTION_COOKIE_NAME)?.value;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PendingAttribution;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Reads the anonymous session cookie (minted by src/middleware.ts, which
@@ -20,11 +45,14 @@ import { authGetUserId } from "./provider";
 /**
  * `attribution`, when supplied, only ever takes effect on this session id's
  * very first creation - the onConflictDoUpdate branch below deliberately
- * never touches firstSource/firstCampaignId, so a returning visitor who
- * later lands through a different campaign link never overwrites their
+ * never touches firstSource/firstCampaignId/utm_*, so a returning visitor
+ * who later lands through a different campaign link never overwrites their
  * original first-touch attribution. Only src/app/go/[code]/route.ts (the
- * campaign-link resolver) ever passes this; every other caller gets the
- * plain "direct"/no-campaign default.
+ * campaign-link resolver) and partner/actions.ts ever pass this
+ * explicitly - every other caller falls back to whatever middleware
+ * captured from this visitor's very first request (see
+ * readPendingAttribution above), or the plain "direct" schema default if
+ * that first request carried no UTM tags and no third-party referrer.
  */
 export async function getOrCreateAnonymousSessionId(attribution?: {
   firstSource: string;
@@ -33,12 +61,19 @@ export async function getOrCreateAnonymousSessionId(attribution?: {
   const cookieStore = await cookies();
   const id = cookieStore.get(ANONYMOUS_COOKIE_NAME)?.value ?? crypto.randomUUID();
 
+  const pending = attribution ? null : await readPendingAttribution(cookieStore);
+
   const [row] = await db
     .insert(anonymousSessions)
     .values({
       id,
-      firstSource: attribution?.firstSource,
+      firstSource: attribution?.firstSource ?? pending?.source,
       firstCampaignId: attribution?.firstCampaignId,
+      utmSource: pending?.utmSource,
+      utmMedium: pending?.utmMedium,
+      utmCampaign: pending?.utmCampaign,
+      utmContent: pending?.utmContent,
+      utmTerm: pending?.utmTerm,
     })
     .onConflictDoUpdate({
       target: anonymousSessions.id,

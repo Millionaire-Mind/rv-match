@@ -95,6 +95,7 @@ export async function submitLead(
       behaviorSnapshot: snapshot,
       firstSource: attribution.firstSource,
       firstCampaignId: attribution.firstCampaignId,
+      firstSalespersonUserId: attribution.firstSalespersonUserId,
     })
     .returning({ id: leads.id });
 

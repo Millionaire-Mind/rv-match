@@ -5,6 +5,7 @@ import { db } from "@/server/db/client";
 import { distributionCampaigns } from "@/server/db/schema";
 import { getOrCreateAnonymousSessionId } from "@/server/auth/anonymous";
 import { trackEvent } from "@/server/analytics/track";
+import { classifyCampaignSource } from "@/server/attribution/source";
 
 /**
  * The single resolver every QR code, dealer link, and creator referral
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // (that's created lazily on first real interaction), so the scan event
   // below isn't tied to a shopper identity.
   await getOrCreateAnonymousSessionId({
-    firstSource: campaign.campaignType === "creator" ? "creator" : "qr",
+    firstSource: classifyCampaignSource(campaign),
     firstCampaignId: campaign.id,
   });
 
@@ -44,8 +45,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     metadata: { campaignId: campaign.id, campaignCode: campaign.code },
   });
 
+  // A per-RV QR/link gets the dedicated "Would You Buy This RV?" reaction
+  // experience (Gap 4B) rather than dropping straight onto the ordinary
+  // detail page - the campaign code carries through so that page can
+  // re-resolve the same RV/dealer context.
   const destination = campaign.inventoryId
-    ? `/rv/${campaign.inventoryId}`
+    ? `/w/${campaign.code}`
     : campaign.dealershipId
       ? `/search?dealershipId=${campaign.dealershipId}`
       : "/discover";

@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Download, Printer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ const TYPE_LABELS: Record<string, string> = {
   dealer_general: "General",
   dealer_inventory: "Specific RV",
   creator: "Creator",
+  salesperson: "Salesperson",
 };
 
 export function CampaignList({
@@ -74,9 +77,27 @@ export function CampaignList({
                 Created {formatRelativeDate(c.createdAt)} · {c.scans} scans · {c.leadsCount} leads · {c.verifiedSales} verified sales
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => copyLink(c.code, c.id)}>
                 {copiedId === c.id ? "Copied" : "Copy Link"}
+              </Button>
+              {qrDataUrls[c.id] && (
+                <Button asChild size="sm" variant="outline">
+                  {/* A data: URL with the download attribute triggers a
+                      normal browser file save - no server round-trip
+                      needed since the PNG was already rendered client-side
+                      into this data URL when the page loaded. */}
+                  <a href={qrDataUrls[c.id]} download={`${c.name.replace(/\s+/g, "-").toLowerCase()}-qr.png`}>
+                    <Download className="h-4 w-4" />
+                    Download QR
+                  </a>
+                </Button>
+              )}
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/dealer/distribution-print/${c.id}`} target="_blank" rel="noopener noreferrer">
+                  <Printer className="h-4 w-4" />
+                  Print
+                </Link>
               </Button>
               <Button size="sm" variant="outline" disabled={pending} onClick={() => toggleActive(c.id, !c.active)}>
                 {c.active ? "Pause" : "Resume"}

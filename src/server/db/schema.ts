@@ -126,6 +126,14 @@ export const anonymousSessions = pgTable("anonymous_sessions", {
    * site - set once at first creation, never overwritten by a later visit
    * through a different link (see src/app/go/[code]/route.ts). */
   firstCampaignId: uuid("first_campaign_id").references(() => distributionCampaigns.id, { onDelete: "set null" }),
+  /** Raw UTM parameters from the very first visit, frozen the same way
+   * firstSource is - see src/server/attribution/source.ts for how these
+   * feed the classified firstSource bucket. */
+  utmSource: text("utm_source"),
+  utmMedium: text("utm_medium"),
+  utmCampaign: text("utm_campaign"),
+  utmContent: text("utm_content"),
+  utmTerm: text("utm_term"),
 });
 
 export const consumerProfiles = pgTable("consumer_profiles", {
@@ -381,6 +389,10 @@ export const distributionCampaigns = pgTable("distribution_campaigns", {
   dealershipId: uuid("dealership_id").references(() => dealerships.id, { onDelete: "cascade" }),
   inventoryId: uuid("inventory_id").references(() => inventory.id, { onDelete: "cascade" }),
   creatorId: uuid("creator_id").references(() => creators.id, { onDelete: "set null" }),
+  /** The dealer staff member this personal referral code is attributed to
+   * (campaignType "salesperson") - independent of who ends up handling
+   * whichever leads it generates. */
+  salespersonUserId: uuid("salesperson_user_id").references(() => profiles.id, { onDelete: "set null" }),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   campaignType: text("campaign_type").notNull(),
@@ -528,6 +540,7 @@ export const leads = pgTable("leads", {
    * silently change what a past lead is attributed to. */
   firstSource: text("first_source"),
   firstCampaignId: uuid("first_campaign_id").references(() => distributionCampaigns.id, { onDelete: "set null" }),
+  firstSalespersonUserId: uuid("first_salesperson_user_id").references(() => profiles.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -572,6 +585,7 @@ export const attributedSales = pgTable("attributed_sales", {
    * was, permanently. */
   firstSource: text("first_source"),
   firstCampaignId: uuid("first_campaign_id").references(() => distributionCampaigns.id, { onDelete: "set null" }),
+  firstSalespersonUserId: uuid("first_salesperson_user_id").references(() => profiles.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

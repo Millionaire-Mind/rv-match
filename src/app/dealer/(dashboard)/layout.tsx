@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Bell, LayoutDashboard, ListChecks, Package, QrCode, UserCog, Users } from "lucide-react";
+import { BarChart3, Bell, LayoutDashboard, ListChecks, Package, QrCode, Share2, UserCog, Users } from "lucide-react";
 
 import { requireDealerContext } from "@/server/dealer/context";
 import { getPilotSummary } from "@/server/dealer/analytics";
@@ -9,7 +9,7 @@ import { brand } from "@/config/brand";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { DemoModeBadge } from "@/components/demo-mode-badge";
 import { dealerRoleLabels } from "@/server/validation/enums";
-import { ANALYTICS_ROLES, MARKETING_ROLES } from "@/server/dealer/permissions";
+import { ANALYTICS_ROLES, LEAD_WORKING_ROLES, MARKETING_ROLES } from "@/server/dealer/permissions";
 
 // Pending/suspended/rejected dealerships never reach this layout -
 // requireDealerContext redirects them to /dealer/pending before returning,
@@ -27,6 +27,7 @@ export default async function DealerDashboardLayout({ children }: { children: Re
     { href: "/dealer/inventory", label: "Inventory", icon: Package },
     ...(ANALYTICS_ROLES.includes(role) ? [{ href: "/dealer/analytics", label: "Analytics", icon: BarChart3 }] : []),
     ...(MARKETING_ROLES.includes(role) ? [{ href: "/dealer/distribution", label: "Distribution", icon: QrCode }] : []),
+    ...(LEAD_WORKING_ROLES.includes(role) ? [{ href: "/dealer/my-link", label: "My Link", icon: Share2 }] : []),
     { href: "/dealer/leads", label: "Leads", icon: Users },
     { href: "/dealer/pilot", label: "Pilot", icon: ListChecks },
     ...(role === "owner" ? [{ href: "/dealer/team", label: "Team", icon: UserCog }] : []),

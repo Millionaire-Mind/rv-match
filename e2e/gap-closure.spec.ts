@@ -6,6 +6,7 @@ import {
   consumerPreferences,
   consumerProfiles,
   dealerships,
+  distributionCampaigns,
   inventory,
   inventoryVideos,
   swipeDecisions,
@@ -267,5 +268,64 @@ test.describe("Gap 3: partner shared match intelligence", () => {
 
     await db.delete(dealerships).where(eq(dealerships.id, dealership.id));
     await partnerContext.close();
+  });
+});
+
+test.describe("Gap 4B: individual-RV QR reaction experience", () => {
+  test("scanning a per-RV QR lands on the real video Would You Buy This RV? page, and reacting invites Find My RV", async ({
+    page,
+  }) => {
+    const suffix = Date.now();
+    const [dealership] = await db
+      .insert(dealerships)
+      .values({
+        name: "__test_gap4b__",
+        slug: `__test-gap4b-${suffix}`,
+        primaryContactName: "Test",
+        primaryContactEmail: `gap4b-${suffix}@example.com`,
+        status: "approved",
+      })
+      .returning({ id: dealerships.id });
+    const [rv] = await db
+      .insert(inventory)
+      .values({
+        dealershipId: dealership.id,
+        stockNumber: `GAP4B-${suffix}`,
+        year: 2025,
+        make: "Jayco",
+        model: "Jay Flight",
+        rvType: "travel_trailer",
+        condition: "new",
+        salePriceCents: 3200000,
+        status: "published",
+        source: "manual",
+      })
+      .returning({ id: inventory.id });
+    const [video] = await db
+      .insert(inventoryVideos)
+      .values({ inventoryId: rv.id, url: "/media/videos/gap4b.mp4", source: "dealer_upload" })
+      .returning({ id: inventoryVideos.id });
+    await db.update(inventory).set({ primaryVideoId: video.id }).where(eq(inventory.id, rv.id));
+    const [campaign] = await db
+      .insert(distributionCampaigns)
+      .values({
+        dealershipId: dealership.id,
+        inventoryId: rv.id,
+        code: `gap4b-${suffix}`,
+        name: "Window sticker QR",
+        campaignType: "dealer_inventory",
+      })
+      .returning();
+
+    await page.goto(`/go/${campaign.code}`);
+    await page.waitForURL(new RegExp(`/w/${campaign.code}$`));
+    await expect(page.getByRole("heading", { name: "Would You Buy This RV?" })).toBeVisible();
+    await assertRealPlayableVideo(page);
+    await expect(page.getByText("2025 Jayco Jay Flight")).toBeVisible();
+
+    await page.getByRole("button", { name: "Yes, I'd buy this" }).click();
+    await expect(page.getByRole("link", { name: "Find My RV" })).toBeVisible({ timeout: 10000 });
+
+    await db.delete(dealerships).where(eq(dealerships.id, dealership.id));
   });
 });

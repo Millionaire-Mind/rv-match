@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-import { ANONYMOUS_COOKIE_NAME } from "@/server/auth/session-cookie";
+import {
+  ANONYMOUS_COOKIE_NAME,
+  PENDING_ATTRIBUTION_COOKIE_MAX_AGE,
+  PENDING_ATTRIBUTION_COOKIE_NAME,
+} from "@/server/auth/session-cookie";
+import { classifyOrganicSource } from "@/server/attribution/source";
 
 /**
  * Two independent responsibilities live here:
@@ -54,10 +59,50 @@ function usesRealSupabase(): boolean {
  * in sync, the same way Server Component renders already behaved
  * correctly without this fix.
  */
+/**
+ * Classifies this first-ever request's UTM params / Referer into a
+ * first-touch source bucket, when there's anything to classify - a
+ * /go/[code] visit (which has its own, more specific campaign-based
+ * attribution) or a bare visit with no UTM tags and no third-party
+ * referrer both correctly produce nothing here, leaving
+ * getOrCreateAnonymousSessionId to fall back to its "direct" schema
+ * default rather than writing a redundant pending-attribution cookie.
+ */
+function capturePendingAttribution(request: NextRequest): string | null {
+  const params = request.nextUrl.searchParams;
+  const utmSource = params.get("utm_source");
+  const utmMedium = params.get("utm_medium");
+  const utmCampaign = params.get("utm_campaign");
+  const utmContent = params.get("utm_content");
+  const utmTerm = params.get("utm_term");
+
+  let referrerHost: string | null = null;
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      referrerHost = new URL(referer).host;
+    } catch {
+      referrerHost = null;
+    }
+  }
+
+  if (!utmSource && !utmMedium && !utmCampaign && !referrerHost) return null;
+
+  const source = classifyOrganicSource({
+    utmSource,
+    utmMedium,
+    referrerHost,
+    appHost: request.nextUrl.host,
+  });
+
+  return JSON.stringify({ source, utmSource, utmMedium, utmCampaign, utmContent, utmTerm });
+}
+
 function ensureAnonymousSession(request: NextRequest, response: NextResponse): NextResponse {
   if (request.cookies.get(ANONYMOUS_COOKIE_NAME)?.value) return response;
 
   const id = crypto.randomUUID();
+  const pendingAttribution = capturePendingAttribution(request);
   request.cookies.set(ANONYMOUS_COOKIE_NAME, id);
   // NextResponse.next({ request }) builds a fresh response from the
   // mutated request - any cookies already set on the incoming `response`
@@ -67,6 +112,16 @@ function ensureAnonymousSession(request: NextRequest, response: NextResponse): N
   const updated = NextResponse.next({ request });
   for (const cookie of response.cookies.getAll()) {
     updated.cookies.set(cookie);
+  }
+  if (pendingAttribution) {
+    request.cookies.set(PENDING_ATTRIBUTION_COOKIE_NAME, pendingAttribution);
+    updated.cookies.set(PENDING_ATTRIBUTION_COOKIE_NAME, pendingAttribution, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: PENDING_ATTRIBUTION_COOKIE_MAX_AGE,
+    });
   }
   updated.cookies.set(ANONYMOUS_COOKIE_NAME, id, {
     httpOnly: true,

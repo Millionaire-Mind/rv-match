@@ -64,3 +64,17 @@ export function verifySessionToken(token: string | undefined | null): string | n
 export const SESSION_COOKIE_NAME = "rvm_auth";
 export const SESSION_COOKIE_MAX_AGE = SESSION_MAX_AGE_SECONDS;
 export const ANONYMOUS_COOKIE_NAME = "rvm_session";
+
+/**
+ * Short-lived, set by middleware only on a visitor's very first request
+ * (alongside the anonymous session cookie) when that request carries UTM
+ * parameters or a third-party Referer - carries the classified source plus
+ * the raw UTM values forward to the first Server Component/Action that
+ * actually creates the anonymous_sessions row, since middleware itself
+ * can't write to Postgres (see src/proxy.ts). Never read after that first
+ * row exists - getOrCreateAnonymousSessionId's onConflictDoUpdate already
+ * ignores firstSource on every later call, so a stale copy of this cookie
+ * lingering past its own expiry is harmless.
+ */
+export const PENDING_ATTRIBUTION_COOKIE_NAME = "rvm_pending_attr";
+export const PENDING_ATTRIBUTION_COOKIE_MAX_AGE = 60 * 10; // 10 minutes

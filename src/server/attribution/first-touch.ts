@@ -1,11 +1,12 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { anonymousSessions, consumerProfiles } from "@/server/db/schema";
+import { anonymousSessions, consumerProfiles, distributionCampaigns } from "@/server/db/schema";
 
 export interface FirstTouchAttribution {
   firstSource: string | null;
   firstCampaignId: string | null;
+  firstSalespersonUserId: string | null;
 }
 
 /**
@@ -26,7 +27,9 @@ export async function getFirstTouchAttribution(consumerProfileId: string): Promi
     .where(eq(consumerProfiles.id, consumerProfileId))
     .limit(1);
 
-  if (!profile?.anonymousSessionId) return { firstSource: null, firstCampaignId: null };
+  if (!profile?.anonymousSessionId) {
+    return { firstSource: null, firstCampaignId: null, firstSalespersonUserId: null };
+  }
 
   const [session] = await db
     .select({ firstSource: anonymousSessions.firstSource, firstCampaignId: anonymousSessions.firstCampaignId })
@@ -34,8 +37,19 @@ export async function getFirstTouchAttribution(consumerProfileId: string): Promi
     .where(eq(anonymousSessions.id, profile.anonymousSessionId))
     .limit(1);
 
+  let firstSalespersonUserId: string | null = null;
+  if (session?.firstCampaignId) {
+    const [campaign] = await db
+      .select({ salespersonUserId: distributionCampaigns.salespersonUserId })
+      .from(distributionCampaigns)
+      .where(eq(distributionCampaigns.id, session.firstCampaignId))
+      .limit(1);
+    firstSalespersonUserId = campaign?.salespersonUserId ?? null;
+  }
+
   return {
     firstSource: session?.firstSource ?? null,
     firstCampaignId: session?.firstCampaignId ?? null,
+    firstSalespersonUserId,
   };
 }

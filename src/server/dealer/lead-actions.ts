@@ -164,6 +164,7 @@ export async function markLeadSold(
         // permanently whatever the lead's was at submission time.
         firstSource: lead.firstSource,
         firstCampaignId: lead.firstCampaignId,
+        firstSalespersonUserId: lead.firstSalespersonUserId,
       });
 
       await tx

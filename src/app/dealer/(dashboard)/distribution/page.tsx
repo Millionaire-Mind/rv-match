@@ -8,6 +8,7 @@ import { inventory } from "@/server/db/schema";
 import { getDealerCampaigns } from "@/server/dealer/campaign-actions";
 import { CampaignForm } from "@/components/dealer/campaign-form";
 import { CampaignList } from "@/components/dealer/campaign-list";
+import { EmbedInstructions } from "@/components/dealer/embed-instructions";
 
 export const metadata: Metadata = { title: "Distribution Center" };
 export const dynamic = "force-dynamic";
@@ -44,6 +45,13 @@ export default async function DistributionCenterPage() {
       </div>
 
       <CampaignList dealershipId={dealership.id} campaigns={campaigns} appUrl={appUrl} qrDataUrls={qrDataUrls} />
+
+      <EmbedInstructions
+        link={(() => {
+          const general = campaigns.find((c) => c.campaignType === "dealer_general" && c.active);
+          return general ? `${appUrl}/go/${general.code}` : null;
+        })()}
+      />
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Create a new link</h2>

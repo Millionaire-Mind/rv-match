@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/server/db/client";
 import { attributedSales, behavioralEvents, distributionCampaigns, inventory, leads } from "@/server/db/schema";
 import { requireCampaignInDealership, requireDealerRole, requireInventoryInDealership } from "@/server/auth/guards";
-import { MARKETING_ROLES } from "@/server/dealer/permissions";
+import { LEAD_WORKING_ROLES, MARKETING_ROLES } from "@/server/dealer/permissions";
 import { logAudit } from "@/server/audit/log";
 import { generateUniqueCampaignCode } from "@/server/distribution/campaign-code";
 
@@ -73,6 +73,25 @@ export interface CampaignWithStats {
   verifiedSales: number;
 }
 
+async function campaignStats(campaignId: string): Promise<{ scans: number; leadsCount: number; verifiedSales: number }> {
+  const [scansRow] = await db
+    .select({ n: count() })
+    .from(behavioralEvents)
+    .where(
+      and(
+        eq(behavioralEvents.eventType, "campaign_scan"),
+        sql`${behavioralEvents.metadata}->>'campaignId' = ${campaignId}`,
+      ),
+    );
+  const [leadsRow] = await db.select({ n: count() }).from(leads).where(eq(leads.firstCampaignId, campaignId));
+  const [salesRow] = await db
+    .select({ n: count() })
+    .from(attributedSales)
+    .where(and(eq(attributedSales.firstCampaignId, campaignId), eq(attributedSales.verificationStatus, "verified")));
+
+  return { scans: scansRow?.n ?? 0, leadsCount: leadsRow?.n ?? 0, verifiedSales: salesRow?.n ?? 0 };
+}
+
 export async function getDealerCampaigns(dealershipId: string): Promise<CampaignWithStats[]> {
   await requireDealerRole(dealershipId, MARKETING_ROLES);
 
@@ -96,21 +115,7 @@ export async function getDealerCampaigns(dealershipId: string): Promise<Campaign
 
   const results: CampaignWithStats[] = [];
   for (const c of campaigns) {
-    const [scansRow] = await db
-      .select({ n: count() })
-      .from(behavioralEvents)
-      .where(
-        and(
-          eq(behavioralEvents.eventType, "campaign_scan"),
-          sql`${behavioralEvents.metadata}->>'campaignId' = ${c.id}`,
-        ),
-      );
-    const [leadsRow] = await db.select({ n: count() }).from(leads).where(eq(leads.firstCampaignId, c.id));
-    const [salesRow] = await db
-      .select({ n: count() })
-      .from(attributedSales)
-      .where(and(eq(attributedSales.firstCampaignId, c.id), eq(attributedSales.verificationStatus, "verified")));
-
+    const stats = await campaignStats(c.id);
     results.push({
       id: c.id,
       code: c.code,
@@ -119,10 +124,58 @@ export async function getDealerCampaigns(dealershipId: string): Promise<Campaign
       active: c.active,
       inventoryLabel: c.inventoryId ? `${c.year} ${c.make} ${c.model}` : null,
       createdAt: c.createdAt,
-      scans: scansRow?.n ?? 0,
-      leadsCount: leadsRow?.n ?? 0,
-      verifiedSales: salesRow?.n ?? 0,
+      ...stats,
     });
   }
   return results;
+}
+
+/**
+ * Gap 4A: a personal, self-service referral code for any dealer staff
+ * member (not just marketing/owner, who manage the shared campaign list) -
+ * reused rather than re-minted on every call, mirroring
+ * createOrGetPartnerInviteLink's "reuse the pending one" pattern so a
+ * salesperson's printed business cards/QR stay valid indefinitely.
+ */
+export async function getOrCreateSalespersonCampaign(dealershipId: string): Promise<CampaignWithStats> {
+  const { userId } = await requireDealerRole(dealershipId, LEAD_WORKING_ROLES);
+
+  const [existing] = await db
+    .select()
+    .from(distributionCampaigns)
+    .where(
+      and(
+        eq(distributionCampaigns.dealershipId, dealershipId),
+        eq(distributionCampaigns.salespersonUserId, userId),
+        eq(distributionCampaigns.campaignType, "salesperson"),
+      ),
+    )
+    .limit(1);
+
+  const campaign =
+    existing ??
+    (
+      await db
+        .insert(distributionCampaigns)
+        .values({
+          dealershipId,
+          salespersonUserId: userId,
+          code: await generateUniqueCampaignCode(),
+          name: "My Referral Link",
+          campaignType: "salesperson",
+        })
+        .returning()
+    )[0];
+
+  const stats = await campaignStats(campaign.id);
+  return {
+    id: campaign.id,
+    code: campaign.code,
+    name: campaign.name,
+    campaignType: campaign.campaignType,
+    active: campaign.active,
+    inventoryLabel: null,
+    createdAt: campaign.createdAt,
+    ...stats,
+  };
 }

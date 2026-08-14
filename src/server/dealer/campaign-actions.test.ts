@@ -24,7 +24,9 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const { localSignUp } = await import("@/server/auth/local-provider");
 const { signSessionToken } = await import("@/server/auth/session-cookie");
 const { ForbiddenError } = await import("@/server/auth/guards");
-const { createDealerCampaign, setCampaignActive, deleteCampaign } = await import("./campaign-actions");
+const { createDealerCampaign, setCampaignActive, deleteCampaign, getOrCreateSalespersonCampaign } = await import(
+  "./campaign-actions"
+);
 
 let dealershipAId: string;
 let dealershipBId: string;
@@ -151,5 +153,44 @@ describe("campaign role gate (marketing, not just management)", () => {
     const fd = new FormData();
     fd.set("name", "Should be blocked");
     await expect(createDealerCampaign(dealershipAId, { ok: false, error: "" }, fd)).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe("Gap 4A: self-service salesperson referral code", () => {
+  it("creates a personal code for a salesperson (not gated behind the marketing role)", async () => {
+    const suffix = Date.now();
+    const salesperson = await localSignUp({ email: `salesperson-qr-${suffix}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId: dealershipAId, userId: salesperson.userId, role: "salesperson" });
+    asUser(salesperson.userId);
+
+    const campaign = await getOrCreateSalespersonCampaign(dealershipAId);
+    expect(campaign.campaignType).toBe("salesperson");
+
+    const [row] = await db
+      .select({ salespersonUserId: distributionCampaigns.salespersonUserId })
+      .from(distributionCampaigns)
+      .where(eq(distributionCampaigns.id, campaign.id));
+    expect(row.salespersonUserId).toBe(salesperson.userId);
+  });
+
+  it("reuses the same code on a second call rather than minting a new one", async () => {
+    const suffix = Date.now();
+    const salesperson = await localSignUp({ email: `salesperson-qr-reuse-${suffix}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId: dealershipAId, userId: salesperson.userId, role: "salesperson" });
+    asUser(salesperson.userId);
+
+    const first = await getOrCreateSalespersonCampaign(dealershipAId);
+    const second = await getOrCreateSalespersonCampaign(dealershipAId);
+    expect(second.id).toBe(first.id);
+    expect(second.code).toBe(first.code);
+  });
+
+  it("rejects a marketing-role user - this is a personal lead-working tool, not the shared campaign manager", async () => {
+    const suffix = Date.now();
+    const marketer = await localSignUp({ email: `salesperson-qr-marketing-${suffix}@example.com`, password: "TestPassword123!" });
+    await db.insert(dealershipUsers).values({ dealershipId: dealershipAId, userId: marketer.userId, role: "marketing" });
+    asUser(marketer.userId);
+
+    await expect(getOrCreateSalespersonCampaign(dealershipAId)).rejects.toThrow(ForbiddenError);
   });
 });

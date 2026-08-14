@@ -89,14 +89,14 @@ async function makeCampaign(overrides: Partial<typeof distributionCampaigns.$inf
 }
 
 describe("GET /go/[code]", () => {
-  it("redirects to the specific RV for an inventory-targeted campaign", async () => {
+  it("redirects to the Would You Buy This RV? reaction page for an inventory-targeted campaign", async () => {
     const campaign = await makeCampaign({ dealershipId, inventoryId, campaignType: "dealer_inventory" });
     currentCookieValue = crypto.randomUUID();
     anonymousSessionIds.push(currentCookieValue);
 
     const res = await GET(makeRequest(campaign.code), { params: Promise.resolve({ code: campaign.code }) });
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(`http://localhost:3000/rv/${inventoryId}`);
+    expect(res.headers.get("location")).toBe(`http://localhost:3000/w/${campaign.code}`);
   });
 
   it("redirects to a dealer-filtered search for a dealer-general campaign", async () => {
@@ -131,9 +131,25 @@ describe("GET /go/[code]", () => {
     await GET(makeRequest(campaign.code), { params: Promise.resolve({ code: campaign.code }) });
 
     const [session] = await db.select().from(anonymousSessions).where(eq(anonymousSessions.id, currentCookieValue));
-    expect(session.firstSource).toBe("qr");
+    expect(session.firstSource).toBe("dealer");
     expect(session.firstCampaignId).toBe(campaign.id);
   });
+
+  it("classifies a per-RV QR campaign's first-touch source as qr, not dealer", async () => {
+    const campaign = await makeCampaign({ dealershipId, inventoryId, campaignType: "dealer_inventory" });
+    currentCookieValue = crypto.randomUUID();
+    anonymousSessionIds.push(currentCookieValue);
+
+    await GET(makeRequest(campaign.code), { params: Promise.resolve({ code: campaign.code }) });
+
+    const [session] = await db.select().from(anonymousSessions).where(eq(anonymousSessions.id, currentCookieValue));
+    expect(session.firstSource).toBe("qr");
+  });
+
+  // The salesperson/creator branches of the same classifier are covered
+  // directly (with no need for a real profiles/creators row) by
+  // src/server/attribution/source.test.ts - this file focuses on proving
+  // the route actually calls it and persists the result.
 
   it("never overwrites first-touch attribution on a later visit through a different campaign", async () => {
     const firstCampaign = await makeCampaign({ dealershipId, campaignType: "dealer_general" });

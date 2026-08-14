@@ -1,10 +1,12 @@
 # RV Match — Architecture
 
-> Scope note: this document describes the **V1 core-loop build** (see
-> `IMPLEMENTATION_PLAN.md` for the exact kept/deferred feature list). It
-> intentionally does not describe deferred subsystems (creator portal,
-> generic feed-import framework, campaign/QR distribution, partner
-> matching, billing) — those are not present in the codebase.
+> See `IMPLEMENTATION_PLAN.md` for the phase-by-phase build history and
+> what's permanently out of scope (checkout/payments, DMS integration,
+> lending, insurance, trip planning, a social network, a chatbot,
+> blockchain). Everything else described below - including the creator
+> portal, generic feed-import framework, campaign/QR distribution, and
+> partner matching an earlier revision of this document said weren't
+> present - is built and covered by this document.
 
 ## Overview
 
@@ -103,10 +105,11 @@ scoring engine (`engine.ts`):
   and a CTA frame — all sourced directly from inventory columns, never
   invented.
 - Jobs are rows in `video_generation_jobs` (`queued` -> `processing` ->
-  `completed`/`failed`) processed by a worker (`src/server/video/worker.ts`,
-  invoked by `scripts/run-video-worker.ts` and by the
-  `/api/video-jobs/process` route for on-demand/dev processing). Failed
-  jobs are retryable from the dealer inventory UI.
+  `completed`/`failed`) processed by a dedicated worker
+  (`src/server/video/worker.ts`), invoked by `scripts/run-video-worker.ts`
+  (one-shot for cron, or `--loop` as a persistent daemon - see README.md
+  "Video generation worker"). Failed jobs are retryable from both the
+  dealer inventory UI and, platform-wide, `/admin/videos`.
 - Dealer-uploaded video always outranks a generated video:
   `inventory.primary_video_id` is set explicitly by the dealer, and
   generation only auto-assigns itself as primary when no video exists yet.
@@ -132,6 +135,96 @@ dealer sees *why* a lead is high- or low-intent without receiving raw event
 logs. Sale attribution (`attributed_sales`) links back to the originating
 lead and RV; if the consumer bought a different unit from the same
 dealership, the record still preserves RV Match as the acquisition source.
+
+## Traditional search
+
+`/search` (`src/server/search/query.ts`) is a second browse path alongside
+the swipe feed, not a replacement for it - filter by type/make/model/year/
+price/dimensions/amenities/location, sorted by relevance/price/recency.
+Draws from the same `discoveryEligible()` pool (published + has a video)
+as the swipe feed, so search never surfaces an RV the feed would withhold.
+"Show Me Similar RVs" from a search result or RV detail page feeds that RV
+into the preference engine the same way MORE LIKE THIS does mid-swipe,
+then routes back into personalized discovery - search and the learning
+feed are one system, not two.
+
+## Partner matching
+
+"Compare With My Partner" (`src/server/partner/`) lets two consumers build
+independent swipe histories under one shared invite link
+(`partner_links`), then view the RVs they both scored highly on
+(`getSharedMatches`, the minimum of each partner's fit score) once both
+cross the match-complete decision threshold. Each partner's preference
+profile stays fully separate; only the shared-match view reads both.
+
+## Distribution, attribution, and creators
+
+Every QR code, dealer-generated link, and creator referral link resolves
+through one route, `/go/[code]` (`distribution_campaigns`), which records
+first-touch attribution on an anonymous session's *first* creation only -
+`getOrCreateAnonymousSessionId`'s `onConflictDoUpdate` deliberately never
+touches `firstSource`/`firstCampaignId` on a later visit, so a shopper's
+original acquisition source is never overwritten by a subsequent visit
+through a different link. That attribution is copied (frozen, not
+re-derived) onto a lead at submission and onto an attributed sale at
+verification, so editing a campaign afterward can't retroactively change
+what a past lead or sale is attributed to. Dealers manage their own QR/
+link campaigns from `/dealer/distribution`; platform admins manage
+creators and creator-specific campaigns from `/admin/creators`, and can
+deactivate any campaign platform-wide from `/admin/campaigns`.
+
+## Generic feed import
+
+Beyond manual CSV upload, dealers can register a remote feed
+(`inventory_feed_sources` - CSV/JSON/XML, with a configurable field
+mapping and refresh interval) that a dedicated worker
+(`scripts/run-feed-import.ts`, mirroring the video worker's one-shot/
+`--loop` pattern) fetches and upserts on schedule (`inventory_feed_runs`
+records each run's outcome). Both manual CSV import and feed import share
+one upsert path (`src/server/dealer/inventory-upsert.ts`) so price-history
+tracking, geocoding, and feature-list handling can't drift between the two
+entry points. Feed URLs are validated against SSRF before every fetch
+(`assertPublicFeedUrl` rejects loopback/RFC1918/link-local hosts).
+
+## Notifications
+
+A single `notifications` table backs both consumer and dealer inboxes
+(`/notifications`, `/dealer/notifications`), written by
+`src/server/notifications/create.ts` for nine trigger points (new/high-
+intent/appointment leads, sale-awaiting-verification, video-generation
+failure, saved-RV sold, price drop, strong new-listing match, partner-
+match-complete). Email is a best-effort bonus channel on top of the always-
+written in-app record: attempted for a dealer user always, for a consumer
+only when they resolve to a signed-up account with email notifications not
+opted out (`consumer_profiles.email_opt_out`). Every dynamic value
+interpolated into an email's HTML body is escaped
+(`src/server/email/escape-html.ts`) before being sent.
+
+## Platform administration
+
+`/admin` covers the whole system, not just dealer approval and sale
+verification: platform users, consumers (engagement-ranked), inventory and
+video-generation jobs (with a real retry action for a permanently-failed
+job) across every dealership, leads, distribution campaigns, creators,
+account-deletion requests, and configuration (recommendation/intent
+weights, pilot defaults, platform thresholds). `/admin/funnel` breaks the
+core acquisition funnel (sessions -> activated shoppers -> accounts ->
+leads -> verified sales) out by real first-touch source rather than only
+showing an aggregate - see "Distribution, attribution, and creators" above
+for how that attribution is captured and frozen.
+
+## Privacy and data rights
+
+`/account` gives a consumer three real, working controls: download
+everything tied to their identity as JSON (`/api/account/export`, purely
+self-service - no request/approval step needed since it's read-only),
+toggle email notifications, and request account deletion. Deletion is
+request-based rather than instant self-service (`account_deletion_requests`,
+fulfilled from `/admin/privacy-requests`) because a dealer may have a
+legitimate business reason to retain a lead a consumer submitted to them
+even after that consumer's shopper profile is gone - the FK from `leads`
+to `consumer_profiles` is `on delete set null`, so deleting the profile
+detaches it from the lead without touching the dealer's own record.
 
 ## Deployment
 

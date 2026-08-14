@@ -109,12 +109,17 @@ handlers, which independently call `requireDealerRole(dealershipId)` or
 database. This is what the tenant-isolation security tests exercise
 directly.
 
-## Deferred from the schema (see IMPLEMENTATION_PLAN.md)
+## Tables added after the initial schema (see IMPLEMENTATION_PLAN.md)
 
-No tables exist yet for: creators, campaigns/acquisition_sessions,
-partner_invites/partner_matches, searches, inventory_feed_sources,
-inventory_import_jobs (beyond the CSV path, which doesn't need a persisted
-job table in V1), or a general-purpose notifications table (the one
-notification V1 sends — new lead to dealer — is a direct email send, not a
-queued/stored notification). Adding any of these later is additive and
-does not require reworking the tables above.
+An earlier revision of this document listed several tables as "deferred" -
+all of them exist now, added by the correction/completion phases:
+`partner_links` (couples/partner matching), `distribution_campaigns` +
+`creators` (QR/link distribution and creator referrals, plus
+`first_source`/`first_campaign_id` on `anonymous_sessions`/`leads`/
+`attributed_sales` for durable first-touch attribution), `inventory_feed_sources`
++ `inventory_feed_runs` (the generic CSV/XML/JSON feed-import framework),
+`notifications` (the in-app inbox both consumer and dealer surfaces read
+from), and `account_deletion_requests` + `consumer_profiles.email_opt_out`
+(consumer data rights). `src/server/db/schema.ts` is the current source of
+truth for every table; this document describes the shape and intent of
+each, not an exhaustive up-to-the-column listing.

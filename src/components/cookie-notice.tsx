@@ -31,9 +31,9 @@ export function CookieNotice() {
   return (
     <div
       ref={ref}
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card px-4 py-3 shadow-lg"
+      className="fixed bottom-4 left-4 right-4 z-50 max-w-sm rounded-xl border border-border bg-card px-4 py-3 shadow-lg sm:left-auto"
     >
-      <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col items-start gap-3">
         <p className="text-xs text-muted-foreground">
           We use one first-party cookie to remember your matches and preferences - no third-party trackers. See our{" "}
           <Link href="/privacy" className="underline">

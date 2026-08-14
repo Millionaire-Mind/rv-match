@@ -2,24 +2,32 @@
 
 RV Match is a video-first RV discovery marketplace: consumers watch
 short vertical videos of RVs and react with **Pass / Like / Love / More
-Like This**, the platform learns their preferences from that behavior,
-and increasingly relevant recommendations lead to dealer leads with
-real behavioral context attached. This repository is the V1 build of
-that closed loop:
+Like This** (or use traditional keyword/filter search), the platform learns
+their preferences from that behavior, and increasingly relevant
+recommendations lead to dealer leads with real, dealer-scoped behavioral
+context attached. The core loop:
 
 ```
 dealer inventory -> video (dealer-uploaded or auto-generated) -> consumer
-swipes -> learned preferences -> better recommendations -> RV detail ->
-dealer lead (with behavioral context) -> dealer pipeline -> attributable
-sale -> admin verification -> pilot progress + dashboards update
+swipes or searches -> learned preferences -> better recommendations -> RV
+detail -> dealer lead (with behavioral context) -> dealer pipeline ->
+attributable sale -> admin verification -> pilot progress + dashboards update
 ```
 
-**Scope note:** the original spec for this product describes a much larger
-surface (creator/influencer portal, generic feed-import framework, campaign
-distribution tools, couples matching, etc.). V1 is deliberately scoped down
-to build the loop above to real, tested, production quality rather than
-spread thin across every feature. See `IMPLEMENTATION_PLAN.md` for the full
-kept/deferred list and reasoning.
+Beyond that loop, the platform also includes: couples/partner matching,
+a generic feed-import framework (CSV/XML/JSON) alongside manual CSV import,
+a distribution/QR center with durable first-touch attribution and creator
+referral links, a full in-app + email notification system, price-history
+consumer behavior, full dealer RBAC (Owner/Sales Manager/Salesperson/
+Marketing), dealer analytics + demand intelligence, a platform admin
+surface covering the whole system plus a First-10,000 acquisition funnel,
+and consumer privacy/data-rights pages. See `IMPLEMENTATION_PLAN.md`'s
+phase list for exactly what each phase built, and its "Scope" section for
+what's permanently excluded (checkout/payments, DMS integration, lending,
+insurance, trip planning, a social network, a chatbot, blockchain) versus
+what's genuinely still open (a connected production Supabase project, real
+SMTP/hosting credentials, an end-to-end Docker build in an environment that
+can reach Docker Hub).
 
 ## Architecture at a glance
 
@@ -247,13 +255,18 @@ admin dashboards show a small "Demo data" badge whenever
   CLI registry — `ui.shadcn.com` is not reachable from this build
   environment's network policy. They follow the same Radix + CVA +
   Tailwind conventions the CLI generates.
-- Features listed as "Explicitly deferred" in `IMPLEMENTATION_PLAN.md`
-  (traditional search, partner/couples matching, creator portal, campaign
-  distribution tools, generic feed-import framework, granular dealer
-  employee permissions, full notification system, demand-intelligence
-  suite, billing) are genuinely not built — not hidden behind a disabled
-  flag, not stubbed to look built. Nothing in this repository claims to
-  do something it doesn't.
+- The items `IMPLEMENTATION_PLAN.md`'s "Scope" section lists as
+  **permanently out of scope** (checkout/payment processing or escrow, a
+  dealer-management-system integration, lending/financing origination,
+  insurance, campground/trip planning, a social network or public forums, a
+  general service marketplace, a manufacturer-facing portal, an AI chatbot,
+  and any blockchain component) are genuinely not built anywhere in this
+  repository — not hidden behind a disabled flag, not stubbed to look built.
+  Everything else the original master spec describes — traditional search,
+  partner/couples matching, the creator portal, campaign distribution
+  tools, the generic feed-import framework, granular dealer employee
+  permissions, the full notification system, and the demand-intelligence
+  suite — is built; see `IMPLEMENTATION_PLAN.md`'s phase list for where.
 
 ## Project structure
 

@@ -357,3 +357,71 @@ test.describe("Gap 5: dealer analytics charts", () => {
     await expect(page.getByRole("columnheader", { name: "Unique Viewers" })).toBeVisible();
   });
 });
+
+test.describe("Gap 8: optional browser geolocation alongside ZIP", () => {
+  test("granting location access persists real coordinates and closes the prompt without ever touching the ZIP field", async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation({ latitude: 39.7392, longitude: -104.9903 }); // Denver, CO
+
+    await page.goto("/discover");
+    await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+    await swipeTimes(page, 10, "ArrowRight");
+
+    const zipDialog = page.getByRole("dialog");
+    await expect(zipDialog.getByText("Want to see RVs you can actually buy near you?")).toBeVisible({
+      timeout: 10000,
+    });
+    await zipDialog.getByRole("button", { name: "Use my location" }).click();
+    await expect(zipDialog).not.toBeVisible({ timeout: 10000 });
+
+    const sessionCookie = (await context.cookies()).find((c) => c.name === "rvm_session");
+    expect(sessionCookie).toBeDefined();
+    const [profile] = await db
+      .select({ lat: consumerProfiles.lat, lng: consumerProfiles.lng, zipCode: consumerProfiles.zipCode })
+      .from(consumerProfiles)
+      .where(eq(consumerProfiles.anonymousSessionId, sessionCookie!.value));
+    expect(profile).toBeDefined();
+    expect(Number(profile.lat)).toBeCloseTo(39.7392, 1);
+    expect(Number(profile.lng)).toBeCloseTo(-104.9903, 1);
+    // ZIP was never touched - geolocation is an alternative path, not a
+    // requirement to also fill in the ZIP field.
+    expect(profile.zipCode).toBeNull();
+  });
+
+  test("denying location access falls back gracefully - the ZIP field is still right there, with no dead end", async ({
+    page,
+  }) => {
+    // Simulate a real browser permission denial: getCurrentPosition's
+    // error callback fires with PERMISSION_DENIED (code 1), the same as
+    // Chrome does when a user clicks "Block" on the native prompt.
+    await page.addInitScript(() => {
+      Object.defineProperty(window.navigator, "geolocation", {
+        configurable: true,
+        value: {
+          getCurrentPosition: (_success: PositionCallback, error?: PositionErrorCallback) => {
+            error?.({ code: 1, message: "User denied Geolocation" } as GeolocationPositionError);
+          },
+        },
+      });
+    });
+
+    await page.goto("/discover");
+    await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+    await swipeTimes(page, 10, "ArrowRight");
+
+    const zipDialog = page.getByRole("dialog");
+    await expect(zipDialog.getByText("Want to see RVs you can actually buy near you?")).toBeVisible({
+      timeout: 10000,
+    });
+    await zipDialog.getByRole("button", { name: "Use my location" }).click();
+    await expect(zipDialog.getByText(/couldn't access your location/i)).toBeVisible({ timeout: 10000 });
+
+    // The dialog is still open and the ZIP path still works - no dead end.
+    await zipDialog.getByRole("textbox", { name: "ZIP code" }).fill("80202");
+    await zipDialog.getByRole("button", { name: "Save" }).click();
+    await expect(zipDialog).not.toBeVisible({ timeout: 5000 });
+  });
+});

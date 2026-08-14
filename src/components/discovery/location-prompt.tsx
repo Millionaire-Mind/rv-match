@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { submitZipCode } from "@/server/discovery/location";
+import { UseMyLocationButton } from "@/components/discovery/use-my-location-button";
 
 interface LocationPromptProps {
   open: boolean;
@@ -50,6 +51,15 @@ export function LocationPrompt({ open, onOpenChange, onSaved }: LocationPromptPr
             this anytime.
           </DialogDescription>
         </DialogHeader>
+        <UseMyLocationButton
+          onSuccess={() => {
+            onSaved();
+            onOpenChange(false);
+          }}
+        />
+        <div className="relative py-1 text-center text-xs text-muted-foreground">
+          <span className="relative bg-background px-2">or enter your ZIP code</span>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor="zip">ZIP code</Label>

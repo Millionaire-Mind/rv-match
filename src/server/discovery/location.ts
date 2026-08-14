@@ -47,6 +47,16 @@ export async function setSearchRadius(radiusMiles: number): Promise<void> {
     .where(eq(consumerProfiles.id, consumerProfileId));
 }
 
+/**
+ * Gap 8: optional browser geolocation, alongside (never replacing) ZIP
+ * entry. Rounded to 3 decimal places (~110m) rather than the browser's
+ * native precision (often within a few meters) - accurate enough for
+ * "which dealers are nearby" radius filtering, the only thing this value
+ * is ever used for (see recommendation/engine.ts and
+ * recommendation/purchase-intent.ts), without storing a consumer's exact
+ * location. Dealers never see raw consumer coordinates in any view - only
+ * derived distance.
+ */
 export async function submitGeolocation(lat: number, lng: number): Promise<void> {
   const parsedLat = latSchema.safeParse(lat);
   const parsedLng = lngSchema.safeParse(lng);
@@ -55,7 +65,7 @@ export async function submitGeolocation(lat: number, lng: number): Promise<void>
   const consumerProfileId = await getOrCreateConsumerProfileId();
   await db
     .update(consumerProfiles)
-    .set({ lat: parsedLat.data.toFixed(6), lng: parsedLng.data.toFixed(6) })
+    .set({ lat: parsedLat.data.toFixed(3), lng: parsedLng.data.toFixed(3) })
     .where(eq(consumerProfiles.id, consumerProfileId));
   await trackEvent({ consumerProfileId, eventType: "location_added", metadata: { source: "geolocation" } });
 }

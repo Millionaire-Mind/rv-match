@@ -60,12 +60,14 @@ describe("setSearchRadius", () => {
 });
 
 describe("submitGeolocation", () => {
-  it("persists valid coordinates", async () => {
+  it("persists valid coordinates, rounded to ~110m rather than the browser's exact precision (Gap 8: don't over-expose precise coordinates)", async () => {
     const { consumerProfileId } = await newSession();
     await submitGeolocation(39.7392, -104.9903); // Denver, CO
     const [row] = await db.select({ lat: consumerProfiles.lat, lng: consumerProfiles.lng }).from(consumerProfiles).where(eq(consumerProfiles.id, consumerProfileId));
-    expect(Number(row.lat)).toBeCloseTo(39.7392, 4);
-    expect(Number(row.lng)).toBeCloseTo(-104.9903, 4);
+    expect(Number(row.lat)).toBeCloseTo(39.7392, 2);
+    expect(Number(row.lng)).toBeCloseTo(-104.9903, 2);
+    expect(Number(row.lat).toFixed(3)).toBe("39.739");
+    expect(Number(row.lng).toFixed(3)).toBe("-104.990");
   });
 
   it("silently rejects out-of-range coordinates", async () => {

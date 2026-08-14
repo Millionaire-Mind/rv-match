@@ -24,6 +24,17 @@ export default function SignUpPage() {
         </CardHeader>
         <CardContent>
           <AuthForm mode="signup" action={signUpAction} altHref="/login" altLabel="Sign in" />
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            By creating an account, you agree to our{" "}
+            <Link href="/terms" className="underline">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
     </main>

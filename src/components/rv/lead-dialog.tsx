@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -149,7 +150,11 @@ function LeadDialogBody({
         <div className="flex items-start gap-2">
           <Checkbox id="lead-consent" name="consent" className="mt-0.5" />
           <Label htmlFor="lead-consent" className="font-normal text-sm leading-snug">
-            I agree to be contacted by this dealership about this RV.
+            I agree to be contacted by this dealership about this RV. See our{" "}
+            <Link href="/privacy" className="underline" target="_blank">
+              Privacy Policy
+            </Link>
+            .
           </Label>
         </div>
 

@@ -139,6 +139,7 @@ export const consumerProfiles = pgTable("consumer_profiles", {
   lng: numeric("lng", { precision: 9, scale: 6 }),
   radiusMiles: integer("radius_miles").notNull().default(100),
   decisionsCount: integer("decisions_count").notNull().default(0),
+  emailOptOut: boolean("email_opt_out").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -466,6 +467,19 @@ export const notifications = pgTable("notifications", {
   link: text("link"),
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A shopper's request to have their account/data deleted - fulfilled by
+ * an admin (src/server/admin/privacy-requests.ts), not instantly
+ * self-service, since a dealer may still have a legitimate business reason
+ * to retain the leads a consumer submitted (see the migration's comment). */
+export const accountDeletionRequests = pgTable("account_deletion_requests", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  consumerProfileId: uuid("consumer_profile_id").references(() => consumerProfiles.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("pending"),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  completedBy: uuid("completed_by").references(() => profiles.id, { onDelete: "set null" }),
 });
 
 export const consumerPreferences = pgTable("consumer_preferences", {

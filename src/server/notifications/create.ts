@@ -32,11 +32,11 @@ export async function notifyConsumer(consumerProfileId: string, params: NotifyPa
   });
 
   const [profile] = await db
-    .select({ userId: consumerProfiles.userId })
+    .select({ userId: consumerProfiles.userId, emailOptOut: consumerProfiles.emailOptOut })
     .from(consumerProfiles)
     .where(eq(consumerProfiles.id, consumerProfileId))
     .limit(1);
-  if (!profile?.userId) return;
+  if (!profile?.userId || profile.emailOptOut) return;
 
   const [user] = await db.select({ email: profiles.email }).from(profiles).where(eq(profiles.id, profile.userId)).limit(1);
   if (!user?.email) return;

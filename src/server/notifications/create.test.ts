@@ -107,6 +107,21 @@ describe("notifyConsumer", () => {
       expect.objectContaining({ to: signedUpEmail, subject: "Price drop" }),
     );
   });
+
+  it("still writes the in-app notification but skips email for a consumer who opted out", async () => {
+    await db.update(consumerProfiles).set({ emailOptOut: true }).where(eq(consumerProfiles.id, signedUpProfileId));
+
+    await notifyConsumer(signedUpProfileId, { type: "opt_out_test", title: "Should not email", body: "body" });
+
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.consumerProfileId, signedUpProfileId), eq(notifications.type, "opt_out_test")));
+    expect(rows).toHaveLength(1);
+    expect(sendMailMock).not.toHaveBeenCalled();
+
+    await db.update(consumerProfiles).set({ emailOptOut: false }).where(eq(consumerProfiles.id, signedUpProfileId));
+  });
 });
 
 describe("notifyDealerUser", () => {

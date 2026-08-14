@@ -8,6 +8,7 @@ import {
   QrCode,
   Settings,
   ShieldCheck,
+  ShieldQuestion,
   Sparkles,
   Store,
   Users,
@@ -34,6 +35,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/campaigns", label: "Campaigns", icon: QrCode },
     { href: "/admin/creators", label: "Creators", icon: Sparkles },
     { href: "/admin/funnel", label: "First 10,000", icon: BarChart3 },
+    { href: "/admin/privacy-requests", label: "Privacy Requests", icon: ShieldQuestion },
     { href: "/admin/config", label: "Configuration", icon: Settings },
   ];
 

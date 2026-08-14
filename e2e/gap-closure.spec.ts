@@ -9,6 +9,7 @@ import {
   distributionCampaigns,
   inventory,
   inventoryVideos,
+  leads,
   swipeDecisions,
 } from "../src/server/db/schema";
 
@@ -423,5 +424,53 @@ test.describe("Gap 8: optional browser geolocation alongside ZIP", () => {
     await zipDialog.getByRole("textbox", { name: "ZIP code" }).fill("80202");
     await zipDialog.getByRole("button", { name: "Save" }).click();
     await expect(zipDialog).not.toBeVisible({ timeout: 5000 });
+  });
+});
+
+test.describe("Gap 9: match score persisted on leads", () => {
+  test("submitting a lead freezes a real, non-zero match score that the dealer can see on the lead", async ({
+    page,
+    context,
+  }) => {
+    await page.goto("/discover");
+    await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+    // A few LOVE decisions build a real preference signal before the lead
+    // is submitted, so the resulting match score isn't just a coin-flip
+    // baseline - it reflects genuine learned preference.
+    await swipeTimes(page, 3, "ArrowUp");
+
+    await page.getByRole("link", { name: "View full details" }).first().click();
+    await page.waitForURL(/\/rv\//, { timeout: 10000 });
+    const inventoryId = page.url().split("/rv/")[1]?.split(/[/?]/)[0];
+
+    const isRockyMountain = (await page.getByText("Rocky Mountain RV Center").count()) > 0;
+    const dealerEmail = isRockyMountain
+      ? "owner@rockymountainrv.example"
+      : "owner@sunshinestatervs.example";
+
+    const leadEmail = `e2e-match-score-${Date.now()}@example.com`;
+    await page.getByRole("button", { name: "Check Availability" }).click();
+    await page.getByLabel("Name").fill("E2E Match Score Lead");
+    await page.getByRole("textbox", { name: "Email" }).fill(leadEmail);
+    await page.getByLabel(/agree to be contacted/i).check();
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText("Request sent")).toBeVisible({ timeout: 10000 });
+
+    const [lead] = await db.select().from(leads).where(eq(leads.email, leadEmail));
+    expect(lead).toBeDefined();
+    expect(lead.matchScore).not.toBeNull();
+    expect(Number(lead.matchScore)).toBeGreaterThanOrEqual(0);
+    expect(Number(lead.matchScore)).toBeLessThanOrEqual(100);
+    expect(lead.inventoryId).toBe(inventoryId);
+
+    const dealerPage = await context.newPage();
+    await dealerPage.goto("/dealer/login");
+    await dealerPage.getByLabel("Email").fill(dealerEmail);
+    await dealerPage.getByLabel("Password").fill(DEMO_PASSWORD);
+    await dealerPage.getByRole("button", { name: "Sign in" }).click();
+    await dealerPage.waitForURL(/\/dealer$/, { timeout: 15000 });
+    await dealerPage.goto(`/dealer/leads/${lead.id}`);
+    await expect(dealerPage.getByRole("heading", { name: "Match Score" })).toBeVisible({ timeout: 10000 });
+    await expect(dealerPage.getByText(`${Math.round(Number(lead.matchScore))}`).first()).toBeVisible();
   });
 });

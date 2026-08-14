@@ -9,7 +9,9 @@ import { getOrCreateConsumerProfileId } from "@/server/auth/anonymous";
 import { trackEvent } from "@/server/analytics/track";
 import { loadIntentWeights } from "@/server/recommendation/config";
 import { computeIntentScore } from "@/server/recommendation/purchase-intent";
+import { scoreOneInventory } from "@/server/recommendation/engine";
 import { getDealerScopedBehaviorSnapshot } from "@/server/recommendation/profile";
+import { logError } from "@/server/logging/log";
 import { getFirstTouchAttribution } from "@/server/attribution/first-touch";
 import { sendMail } from "@/server/email/mailer";
 import { escapeHtml } from "@/server/email/escape-html";
@@ -66,7 +68,7 @@ export async function submitLead(
   if (!dealer) return { ok: false, error: "This dealership is no longer available." };
 
   const intentWeights = await loadIntentWeights();
-  const [intent, snapshot, attribution] = await Promise.all([
+  const [intent, snapshot, attribution, matchScore] = await Promise.all([
     computeIntentScore({
       consumerProfileId,
       dealershipId: dealer.id,
@@ -75,6 +77,18 @@ export async function submitLead(
     }),
     getDealerScopedBehaviorSnapshot(consumerProfileId, dealer.id),
     getFirstTouchAttribution(consumerProfileId),
+    // Gap 9: freeze the consumer's real match score for this specific RV
+    // at the moment they submitted this lead - never re-derived later, so
+    // it stays a true record of what led them to reach out even as their
+    // preferences keep evolving. Scoring is supplementary intelligence,
+    // not core to lead capture, so a failure here must never block lead
+    // submission itself - it just leaves matchScore null.
+    scoreOneInventory(consumerProfileId, rv)
+      .then((result) => result.fitScore)
+      .catch((err) => {
+        logError("leads.match_score", err, { consumerProfileId, inventoryId: rv.id });
+        return null;
+      }),
   ]);
 
   const [lead] = await db
@@ -90,6 +104,7 @@ export async function submitLead(
       message: data.message || null,
       ctaType: data.ctaType,
       consent: data.consent,
+      matchScore: matchScore !== null ? matchScore.toFixed(2) : null,
       intentScore: intent.score.toFixed(2),
       intentReasons: intent.reasons,
       behaviorSnapshot: snapshot,

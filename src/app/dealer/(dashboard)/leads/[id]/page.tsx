@@ -127,6 +127,22 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
         <Card>
           <CardHeader>
+            <CardTitle>Match Score</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">
+              {lead.matchScore !== null ? Number(lead.matchScore) : "—"}
+              <span className="text-base font-normal text-muted-foreground">/100</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              How well this RV fit this shopper&apos;s preferences at the moment they submitted this
+              lead. Frozen at submission — it never changes as their preferences evolve later.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Shopper behavior</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">

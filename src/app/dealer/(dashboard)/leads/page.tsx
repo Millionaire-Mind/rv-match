@@ -44,6 +44,7 @@ export default async function DealerLeadsPage({
                 <th className="px-4 py-3">Lead</th>
                 <th className="px-4 py-3">RV</th>
                 <th className="px-4 py-3">Source</th>
+                <th className="px-4 py-3">Match</th>
                 <th className="px-4 py-3">Intent</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Received</th>
@@ -63,6 +64,13 @@ export default async function DealerLeadsPage({
                     <p className="text-xs text-muted-foreground">{formatCurrency(rv.salePriceCents)}</p>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{leadCtaLabels[lead.ctaType]}</td>
+                  <td className="px-4 py-3">
+                    {lead.matchScore !== null ? (
+                      <Badge variant="outline">{Number(lead.matchScore)}/100</Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {lead.intentScore !== null ? (
                       <Badge variant={Number(lead.intentScore) >= 70 ? "accent" : "outline"}>

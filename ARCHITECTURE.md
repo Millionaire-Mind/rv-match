@@ -135,9 +135,19 @@ dealership, the record still preserves RV Match as the acquisition source.
 
 ## Deployment
 
-- `Dockerfile` + `docker-compose.yml` run the Next.js app, a Postgres
-  container (for fully-local dev without a hosted Supabase project), and the
-  video-worker process.
+- `Dockerfile` (multi-stage, `runner`/`worker` targets) + `docker-compose.yml`
+  run nginx, the Next.js app (`output: "standalone"`), a Postgres container
+  (for fully-local dev without a hosted Supabase project), and the
+  video-worker and feed-worker processes as their own containers — see
+  README.md "Docker deployment" for usage and exactly what was/wasn't
+  build-verified in this environment (Docker Hub is network-policy-blocked
+  here).
+- nginx is the only component allowed to set `X-Real-IP`, from its own view
+  of the TCP connection (`$remote_addr`) — `src/server/security/client-ip.ts`
+  trusts that header alone (never a client-suppliable `X-Forwarded-For`) for
+  the per-IP rate limits on login/signup/dealer-apply.
 - Production target is Vercel (or any Node host) for the app + a hosted
   Supabase project for Postgres/Auth/Storage; the video worker runs as a
-  long-lived process/cron (documented in README.md).
+  long-lived process/cron (documented in README.md). If deploying behind a
+  platform-managed proxy/LB instead of the bundled nginx, whatever sets the
+  trusted client-IP header needs to match what `client-ip.ts` reads.

@@ -9,6 +9,8 @@ import { authSignUp, AuthError } from "@/server/auth/provider";
 import { loadPilotDefaults } from "@/server/recommendation/config";
 import { slugify } from "@/lib/utils";
 import { logAudit } from "@/server/audit/log";
+import { checkRateLimit } from "@/server/security/rate-limit";
+import { getClientIp } from "@/server/security/client-ip";
 
 export type DealerApplicationState = { ok: false; error: string } | { ok: true };
 
@@ -46,6 +48,11 @@ export async function submitDealerApplication(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
   }
   const d = parsed.data;
+
+  const ip = await getClientIp();
+  if (!checkRateLimit(`dealer-apply-ip:${ip}`, 5, 60 * 60 * 1000)) {
+    return { ok: false, error: "Too many applications submitted. Please try again later." };
+  }
 
   let userId: string;
   try {

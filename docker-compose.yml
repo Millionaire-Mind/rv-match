@@ -1,0 +1,111 @@
+# Self-contained production-shaped topology: nginx -> app (Next.js,
+# standalone build) -> Postgres, plus the two background worker processes
+# (video generation, feed import) that the app's own request path never
+# runs inline. Uses the local Postgres auth stub (src/server/auth/
+# local-provider.ts) rather than requiring a hosted Supabase project - swap
+# NEXT_PUBLIC_SUPABASE_URL/keys in .env to point at a real Supabase project
+# instead (see README.md "Environment Variables"); the app auto-detects
+# which provider to use.
+#
+# Usage: cp .env.example .env, fill in SESSION_SECRET (and SMTP_* if you
+# want real outbound email instead of ./local-mail), then `docker compose up`.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rvmatch
+      POSTGRES_PASSWORD: rvmatch
+      POSTGRES_DB: rvmatch
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rvmatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: applies the local auth stub + all supabase/migrations/*.sql,
+  # then exits. `app` and the workers wait for it to finish successfully
+  # before starting - see scripts/db/local-bootstrap.sh for the same
+  # sequence run outside Docker.
+  migrate:
+    build:
+      context: .
+      target: worker
+    environment:
+      DATABASE_URL: postgres://rvmatch:rvmatch@db:5432/rvmatch
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "psql \"$$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/local-dev/supabase-stub.sql &&
+             npx tsx scripts/db/migrate.ts"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://rvmatch:rvmatch@db:5432/rvmatch
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - media:/app/public/media
+      - local-mail:/app/local-mail
+
+  video-worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://rvmatch:rvmatch@db:5432/rvmatch
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - media:/app/public/media
+    command: ["npx", "tsx", "scripts/run-video-worker.ts", "--loop"]
+
+  feed-worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://rvmatch:rvmatch@db:5432/rvmatch
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["npx", "tsx", "scripts/run-feed-import.ts", "--loop"]
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
+volumes:
+  db-data:
+  media:
+  local-mail:

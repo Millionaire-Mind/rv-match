@@ -92,6 +92,50 @@ FFmpeg videos. Subsequent runs are fast for everything except that step.
    direct SQL against `auth.users`, which works identically against a real
    Supabase Postgres instance since GoTrue stores users in that same table).
 
+## Docker deployment
+
+A self-contained topology that doesn't require a hosted Supabase project:
+nginx → the Next.js app (production `standalone` build) → Postgres, plus
+the video-generation and feed-import workers as their own long-lived
+containers (the same worker processes described above, just run in Docker
+instead of via cron/a bare process).
+
+```bash
+cp .env.example .env
+# At minimum, replace SESSION_SECRET with a real random value.
+docker compose up --build
+```
+
+This brings up five services (`db`, `migrate` — a one-shot job that applies
+the local auth stub + all migrations, then exits — `app`, `video-worker`,
+`feed-worker`, `nginx`), publishes the app on `http://localhost` (port 80
+via nginx), and persists Postgres data, uploaded media, and (if `SMTP_*` is
+unset) local dev-mode emails in named volumes across restarts. To point at
+a real Supabase project instead of the bundled Postgres/auth stub, fill in
+the Supabase variables in `.env` the same way as "Using a real Supabase
+project" above — `docker-compose.yml`'s `db`/`migrate` services then become
+unnecessary and can be removed from the `app`/worker services' `depends_on`.
+
+`src/server/security/client-ip.ts` trusts only the `X-Real-IP` header that
+`deploy/nginx.conf` sets from the actual TCP connection (`$remote_addr`),
+never a client-supplied `X-Forwarded-For` — this is what the per-IP rate
+limits on login/signup/dealer-apply key off of. If you put another load
+balancer in front of this nginx, make sure it's the one actually
+terminating client connections, or adjust `deploy/nginx.conf` to trust
+*its* header instead.
+
+**Not build-verified in this environment**: this sandbox's egress policy
+blocks pulling base images from Docker Hub (confirmed via the proxy's own
+status endpoint, not a transient failure), so `docker build`/`docker
+compose up` could not actually be run here. What *was* verified: `next
+build` with `output: "standalone"` (the mode the Dockerfile depends on)
+succeeds and produces the exact directory structure (`server.js`,
+`node_modules`, `public`, `.next/static`) the runtime stage copies, and
+`docker compose config` parses `docker-compose.yml` cleanly with correct
+variable resolution, service dependencies, and volume/command syntax. Run
+a real `docker compose up --build` as the first smoke test in any
+environment where Docker Hub is reachable.
+
 ## Environment variables
 
 See `.env.example` for the full list with inline explanations. Everything
@@ -170,9 +214,13 @@ admin dashboards show a small "Demo data" badge whenever
 
 ## Known limitations
 
-- **This sandbox has no Docker**, so the build was developed and tested
-  against a local (non-Supabase) Postgres + a local auth/storage provider
-  rather than a live Supabase project. The Supabase-targeted code path
+- **This sandbox's network policy blocks Docker Hub**, so `Dockerfile`/
+  `docker-compose.yml` exist and were validated as far as this environment
+  allows (`next build` with `output: "standalone"` and `docker compose
+  config`) — see "Docker deployment" above for exactly what was and wasn't
+  verified. The build itself was developed and tested against a local
+  (non-Supabase) Postgres + a local auth/storage provider rather than a
+  live Supabase project. The Supabase-targeted code path
   (`src/server/auth/supabase-provider.ts`, Supabase Storage upload in
   `src/server/storage/index.ts`) follows the documented `@supabase/ssr`
   and `@supabase/supabase-js` patterns but has not been exercised against a
@@ -186,10 +234,15 @@ admin dashboards show a small "Demo data" badge whenever
 - **Email** without `SMTP_*` configured writes to `./local-mail/` instead
   of sending — intentional, not a bug, so nothing is silently dropped in an
   unconfigured environment.
-- **Rate limiting** (lead-form spam protection, auth) is in-memory, correct
-  for a single-process deployment but not shared across multiple server
-  instances — a horizontally-scaled production deployment should swap
-  `src/server/security/rate-limit.ts` for a shared store (e.g. Redis).
+- **Rate limiting** (lead-form spam protection; per-IP and per-account
+  limits on login, signup, and dealer applications via
+  `src/server/security/client-ip.ts`'s `X-Real-IP`-only IP resolution) is
+  in-memory, correct for a single-process deployment but not shared across
+  multiple server instances — a horizontally-scaled production deployment
+  should swap `src/server/security/rate-limit.ts` for a shared store (e.g.
+  Redis). The IP resolution itself is safe to scale as-is as long as every
+  instance still sits behind a proxy layer that sets `X-Real-IP` from the
+  real client connection the same way `deploy/nginx.conf` does.
 - **shadcn/ui components are hand-authored**, not pulled from the shadcn
   CLI registry — `ui.shadcn.com` is not reachable from this build
   environment's network policy. They follow the same Radix + CVA +

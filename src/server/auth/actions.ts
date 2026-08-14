@@ -8,6 +8,8 @@ import { consumerProfiles, dealershipUsers, profiles } from "@/server/db/schema"
 import { signInSchema, signUpSchema } from "@/server/validation/auth";
 import { authSignIn, authSignOut, authSignUp, AuthError } from "./provider";
 import { getOrCreateAnonymousSessionId } from "./anonymous";
+import { checkRateLimit } from "@/server/security/rate-limit";
+import { getClientIp } from "@/server/security/client-ip";
 
 export type AuthActionState = { error: string } | { error: null };
 
@@ -62,6 +64,11 @@ export async function signUpAction(
     return { error: parsed.error.issues[0]?.message ?? "Please check your details." };
   }
 
+  const ip = await getClientIp();
+  if (!checkRateLimit(`signup-ip:${ip}`, 10, 60 * 60 * 1000)) {
+    return { error: "Too many signup attempts. Please try again later." };
+  }
+
   let userId: string;
   try {
     const result = await authSignUp(parsed.data);
@@ -85,6 +92,17 @@ export async function signInAction(
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check your details." };
+  }
+
+  // Both an IP-keyed and an email-keyed bucket: IP alone lets an attacker
+  // spread one account's guesses across many source addresses to stay
+  // under the limit; email alone lets a botnet brute-force many accounts
+  // from many IPs. Neither is spoofable here - the IP comes from
+  // getClientIp's trusted-proxy header, and the email is only ever used as
+  // an opaque bucket key, never trusted as an identity claim on its own.
+  const ip = await getClientIp();
+  if (!checkRateLimit(`login-ip:${ip}`, 20, 15 * 60 * 1000) || !checkRateLimit(`login-email:${parsed.data.email.trim().toLowerCase()}`, 10, 15 * 60 * 1000)) {
+    return { error: "Too many login attempts. Please try again in a few minutes." };
   }
 
   let userId: string;

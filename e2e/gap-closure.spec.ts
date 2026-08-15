@@ -1,5 +1,9 @@
+import path from "node:path";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 import { db } from "../src/server/db/client";
 import {
@@ -563,5 +567,180 @@ test.describe("Gap 12: anonymous-history merge choice at signup", () => {
     // A genuinely fresh account has no saved RVs - the prior anonymous
     // save must not have attached to it.
     await expect(page.getByText("No saved RVs yet")).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe("Gap 13: critical-path E2E coverage", () => {
+  test("a live recommendation change is genuinely reflected in the UI, not just the scoring function - the RV detail page's Match score rises after new preference signal", async ({
+    page,
+    context,
+  }) => {
+    await page.goto("/discover");
+    await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+    // Cross the decisionsCount >= 3 threshold the fit-score badge requires,
+    // with decisions that don't bias toward the target type below.
+    await swipeTimes(page, 3, "ArrowLeft");
+
+    const consumerProfileId = await getConsumerProfileId(context);
+
+    const [target] = await db
+      .select({ id: inventory.id })
+      .from(inventory)
+      .where(and(eq(inventory.rvType, "toy_hauler"), eq(inventory.status, "published")))
+      .limit(1);
+    expect(target, "seed catalog must have at least one published toy_hauler RV").toBeDefined();
+
+    await page.goto(`/rv/${target.id}`);
+    const matchBadge = page.getByText(/% Match$/);
+    const beforeText = (await matchBadge.count()) > 0 ? await matchBadge.first().textContent() : null;
+    const before = beforeText ? Number(beforeText.replace(/[^\d]/g, "")) : 0;
+
+    // Real preference signal: love several *other* toy_hauler RVs (not the
+    // target itself) directly via the DB, mirroring how a consumer's
+    // learned preference profile actually accumulates from real swipes
+    // elsewhere in the catalog - not by touching the scoring function.
+    const otherToyHaulers = await db
+      .select({ id: inventory.id })
+      .from(inventory)
+      .where(and(eq(inventory.rvType, "toy_hauler"), eq(inventory.status, "published"), ne(inventory.id, target.id)));
+    expect(otherToyHaulers.length, "need at least one other toy_hauler to build a preference signal from").toBeGreaterThan(0);
+    await db.insert(swipeDecisions).values(
+      otherToyHaulers.map((rv) => ({ consumerProfileId, inventoryId: rv.id, decision: "love" as const })),
+    );
+
+    await page.goto(`/rv/${target.id}`);
+    await expect(matchBadge.first()).toBeVisible({ timeout: 10000 });
+    const afterText = await matchBadge.first().textContent();
+    const after = Number(afterText!.replace(/[^\d]/g, ""));
+
+    expect(after).toBeGreaterThan(before);
+  });
+
+  test("a dealer's freshly-published RV appears in real consumer discovery surfaces immediately, and a video-less draft can never be published to reach them", async ({
+    page,
+    context,
+  }) => {
+    await page.goto("/dealer/login");
+    await page.getByLabel("Email").fill("owner@rockymountainrv.example");
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL(/\/dealer$/, { timeout: 15000 });
+
+    // A video-less draft RV: the Publish control must be disabled outright,
+    // not merely rejected server-side after the fact.
+    const runId = Date.now();
+    const noVideoStock = `E2E-NOVIDEO-${runId}`;
+    const noVideoModel = `No Video Model ${runId}`;
+    await page.goto("/dealer/inventory/new");
+    await page.getByLabel("Stock Number").fill(noVideoStock);
+    await page.getByLabel("Year").fill("2024");
+    await page.getByLabel("Make (manufacturer)").fill("E2E Make");
+    await page.getByLabel("Brand").fill("E2E Brand");
+    await page.getByLabel("Model").fill(noVideoModel);
+    await page.getByLabel("Sale Price ($)").fill("39900");
+    await page.getByRole("button", { name: "Create RV" }).click();
+    await page.waitForURL(/\/dealer\/inventory\/[0-9a-f-]+$/, { timeout: 15000 });
+
+    await page.goto("/dealer/inventory");
+    const noVideoRow = page.locator("tr", { hasText: noVideoStock });
+    await expect(noVideoRow).toBeVisible();
+    await expect(noVideoRow.getByRole("button", { name: "Publish" })).toBeDisabled();
+
+    // A real, video-eligible RV: publish it for real through the dealer UI.
+    const liveStock = `E2E-LIVE-${runId}`;
+    const liveModel = `Live Model ${runId}`;
+    await page.goto("/dealer/inventory/new");
+    await page.getByLabel("Stock Number").fill(liveStock);
+    await page.getByLabel("Year").fill("2024");
+    await page.getByLabel("Make (manufacturer)").fill("E2E Make");
+    await page.getByLabel("Brand").fill("E2E Brand");
+    await page.getByLabel("Model").fill(liveModel);
+    await page.getByLabel("Sale Price ($)").fill("42500");
+    await page.getByRole("button", { name: "Create RV" }).click();
+    await page.waitForURL(/\/dealer\/inventory\/[0-9a-f-]+$/, { timeout: 15000 });
+
+    await page.setInputFiles("#photo-upload", path.join(__dirname, "fixtures", "test-photo.jpg"));
+    await expect(page.locator("img[alt='']").first()).toBeVisible({ timeout: 10000 });
+    await page.getByRole("button", { name: "Generate Automatic Video" }).click();
+    await expect(page.getByText("queued", { exact: true })).toBeVisible({ timeout: 10000 });
+    execFileSync(path.join(__dirname, "..", "node_modules", ".bin", "tsx"), ["scripts/run-video-worker.ts"], {
+      cwd: path.join(__dirname, ".."),
+      stdio: "inherit",
+      timeout: 60_000,
+    });
+    await page.reload();
+    await expect(page.getByText("Auto-generated")).toBeVisible({ timeout: 30000 });
+
+    await page.goto("/dealer/inventory");
+    const liveRow = page.locator("tr", { hasText: liveStock });
+    await expect(liveRow.getByRole("button", { name: "Publish" })).toBeEnabled();
+    await liveRow.getByRole("button", { name: "Publish" }).click();
+    await expect(liveRow.getByText("Published")).toBeVisible({ timeout: 10000 });
+
+    // A real, separate anonymous consumer session must now find the
+    // published RV via search - and must never find the video-less one,
+    // which never left draft status.
+    const consumerPage = await context.newPage();
+    await consumerPage.goto(`/search?make=E2E+Make`);
+    await expect(consumerPage.getByText(liveModel)).toBeVisible({ timeout: 10000 });
+    await expect(consumerPage.getByText(noVideoModel)).not.toBeVisible();
+  });
+
+  test("a real dealer-uploaded video file (not the auto-generate pipeline) publishes and plays for consumers", async ({
+    page,
+    context,
+  }) => {
+    const workDir = mkdtempSync(path.join(tmpdir(), "rvm-e2e-video-upload-"));
+    const videoPath = path.join(workDir, "upload.mp4");
+    execFileSync("ffmpeg", [
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=blue:s=360x640:d=1:r=10",
+      "-f",
+      "lavfi",
+      "-i",
+      "anullsrc=channel_layout=stereo:sample_rate=44100",
+      "-shortest",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-c:a",
+      "aac",
+      videoPath,
+    ]);
+
+    await page.goto("/dealer/login");
+    await page.getByLabel("Email").fill("owner@rockymountainrv.example");
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL(/\/dealer$/, { timeout: 15000 });
+
+    const stockNumber = `E2E-UPLOAD-${Date.now()}`;
+    await page.goto("/dealer/inventory/new");
+    await page.getByLabel("Stock Number").fill(stockNumber);
+    await page.getByLabel("Year").fill("2024");
+    await page.getByLabel("Make (manufacturer)").fill("E2E Upload Make");
+    await page.getByLabel("Brand").fill("E2E Upload Brand");
+    await page.getByLabel("Model").fill("Upload Model");
+    await page.getByLabel("Sale Price ($)").fill("45000");
+    await page.getByRole("button", { name: "Create RV" }).click();
+    await page.waitForURL(/\/dealer\/inventory\/[0-9a-f-]+$/, { timeout: 15000 });
+
+    await page.setInputFiles("#video-upload", videoPath);
+    await expect(page.getByText("Primary")).toBeVisible({ timeout: 15000 });
+    // The uploaded video, not an auto-generated one.
+    await expect(page.getByText("Dealer uploaded")).toBeVisible();
+
+    await page.goto("/dealer/inventory");
+    const row = page.locator("tr", { hasText: stockNumber });
+    await row.getByRole("button", { name: "Publish" }).click();
+    await expect(row.getByText("Published")).toBeVisible({ timeout: 10000 });
+
+    const consumerPage = await context.newPage();
+    await consumerPage.goto(`/search?make=E2E+Upload+Make`);
+    await assertRealPlayableVideo(consumerPage);
   });
 });

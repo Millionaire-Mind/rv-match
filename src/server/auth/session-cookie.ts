@@ -64,6 +64,7 @@ export function verifySessionToken(token: string | undefined | null): string | n
 export const SESSION_COOKIE_NAME = "rvm_auth";
 export const SESSION_COOKIE_MAX_AGE = SESSION_MAX_AGE_SECONDS;
 export const ANONYMOUS_COOKIE_NAME = "rvm_session";
+export const ANONYMOUS_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 /**
  * Short-lived, set by middleware only on a visitor's very first request

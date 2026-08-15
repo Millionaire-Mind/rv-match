@@ -2,15 +2,21 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { profiles } from "@/server/db/schema";
+import { anonymousSessions, consumerProfiles, profiles } from "@/server/db/schema";
 
 let currentToken: string | undefined;
+let currentAnonymousSessionId: string | undefined;
 let realIpHeader: string | undefined;
 vi.mock("next/headers", () => ({
   cookies: async () => ({
-    get: (name: string) => (name === "rvm_auth" && currentToken ? { value: currentToken } : undefined),
+    get: (name: string) => {
+      if (name === "rvm_auth" && currentToken) return { value: currentToken };
+      if (name === "rvm_session" && currentAnonymousSessionId) return { value: currentAnonymousSessionId };
+      return undefined;
+    },
     set: (name: string, value: string) => {
       if (name === "rvm_auth") currentToken = value;
+      if (name === "rvm_session") currentAnonymousSessionId = value;
     },
     delete: () => {
       currentToken = undefined;
@@ -30,13 +36,26 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { signInAction, signUpAction } = await import("./actions");
+const { getOrCreateAnonymousSessionId } = await import("./anonymous");
 
 const suffix = Date.now();
 const createdUserIds: string[] = [];
+const createdAnonymousSessionIds: string[] = [];
 
 afterAll(async () => {
   for (const id of createdUserIds) {
     await db.delete(profiles).where(eq(profiles.id, id));
+  }
+  // consumer_profiles must go first - deleting an anonymous_sessions row
+  // it still references would SET NULL its anonymous_session_id, and a
+  // row left with both user_id and anonymous_session_id null violates the
+  // "exactly one identity" check constraint (a leftover unmerged "fresh"
+  // test profile is exactly that case).
+  for (const id of createdAnonymousSessionIds) {
+    await db.delete(consumerProfiles).where(eq(consumerProfiles.anonymousSessionId, id));
+  }
+  for (const id of createdAnonymousSessionIds) {
+    await db.delete(anonymousSessions).where(eq(anonymousSessions.id, id));
   }
 });
 
@@ -105,5 +124,78 @@ describe("signUpAction rate limiting", () => {
       formData({ email: `ratelimit-signup-${suffix}-overflow@example.com`, password: "TestPassword123!", fullName: "Test User" }),
     );
     expect(blocked).toEqual({ error: "Too many signup attempts. Please try again later." });
+  });
+});
+
+describe("signUpAction anonymous-history merge choice (Gap 12)", () => {
+  it("merges the browser's existing anonymous shopping history by default (historyChoice omitted)", async () => {
+    realIpHeader = `203.0.113.${(suffix + 10) % 200}`;
+    currentToken = undefined;
+    currentAnonymousSessionId = undefined;
+
+    // Build up real anonymous shopping history in this "browser" before signing up.
+    // getOrCreateAnonymousSessionId never writes the cookie itself (only
+    // middleware/a Server Action may) - simulate what middleware would
+    // already have done for a real visitor's browser.
+    const anonymousSessionId = await getOrCreateAnonymousSessionId();
+    currentAnonymousSessionId = anonymousSessionId;
+    createdAnonymousSessionIds.push(anonymousSessionId);
+    const [anonProfile] = await db
+      .insert(consumerProfiles)
+      .values({ anonymousSessionId, decisionsCount: 7 })
+      .returning({ id: consumerProfiles.id });
+
+    const email = `merge-default-${suffix}@example.com`;
+    await expect(
+      signUpAction({ error: null }, formData({ email, password: "TestPassword123!", fullName: "Test User" })),
+    ).rejects.toThrow("NEXT_REDIRECT_TEST_SENTINEL");
+
+    const [user] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
+    createdUserIds.push(user.id);
+
+    const [merged] = await db.select().from(consumerProfiles).where(eq(consumerProfiles.id, anonProfile.id));
+    expect(merged.userId).toBe(user.id);
+    expect(merged.decisionsCount).toBe(7); // the prior history itself carried forward, not reset
+  });
+
+  it("does NOT attach the browser's history when 'fresh' is explicitly chosen - a brand-new, empty profile instead", async () => {
+    realIpHeader = `203.0.113.${(suffix + 11) % 200}`;
+    currentToken = undefined;
+    currentAnonymousSessionId = undefined;
+
+    const anonymousSessionId = await getOrCreateAnonymousSessionId();
+    createdAnonymousSessionIds.push(anonymousSessionId);
+    const [anonProfile] = await db
+      .insert(consumerProfiles)
+      .values({ anonymousSessionId, decisionsCount: 9 })
+      .returning({ id: consumerProfiles.id });
+
+    const email = `merge-fresh-${suffix}@example.com`;
+    await expect(
+      signUpAction(
+        { error: null },
+        formData({ email, password: "TestPassword123!", fullName: "Test User", historyChoice: "fresh" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT_TEST_SENTINEL");
+
+    const [user] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
+    createdUserIds.push(user.id);
+
+    // The old anonymous profile is untouched - never attached to this user.
+    const [untouched] = await db.select().from(consumerProfiles).where(eq(consumerProfiles.id, anonProfile.id));
+    expect(untouched.userId).toBeNull();
+
+    // The new user's own profile (if the app happens to have created one
+    // yet) must not be the old one and must not carry its decision count.
+    const [newUserProfile] = await db.select().from(consumerProfiles).where(eq(consumerProfiles.userId, user.id));
+    if (newUserProfile) {
+      expect(newUserProfile.id).not.toBe(anonProfile.id);
+      expect(newUserProfile.decisionsCount).toBe(0);
+    }
+
+    // The anonymous-session cookie was rotated to a new, unrelated session id.
+    expect(currentAnonymousSessionId).toBeDefined();
+    expect(currentAnonymousSessionId).not.toBe(anonymousSessionId);
+    if (currentAnonymousSessionId) createdAnonymousSessionIds.push(currentAnonymousSessionId);
   });
 });

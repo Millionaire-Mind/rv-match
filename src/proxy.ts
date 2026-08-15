@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 import {
+  ANONYMOUS_COOKIE_MAX_AGE,
   ANONYMOUS_COOKIE_NAME,
   PENDING_ATTRIBUTION_COOKIE_MAX_AGE,
   PENDING_ATTRIBUTION_COOKIE_NAME,
@@ -128,7 +129,7 @@ function ensureAnonymousSession(request: NextRequest, response: NextResponse): N
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 365,
+    maxAge: ANONYMOUS_COOKIE_MAX_AGE,
   });
   return updated;
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { AuthActionState } from "@/server/auth/actions";
 
 interface AuthFormProps {
@@ -43,6 +44,25 @@ export function AuthForm({ mode, action, altHref, altLabel }: AuthFormProps) {
           minLength={mode === "signup" ? 8 : undefined}
         />
       </div>
+      {mode === "signup" && (
+        <div className="space-y-2">
+          <Label>This browser has RV shopping history</Label>
+          <RadioGroup defaultValue="keep" name="historyChoice" className="gap-3">
+            <div className="flex items-start gap-2">
+              <RadioGroupItem value="keep" id="historyChoice-keep" className="mt-0.5" />
+              <Label htmlFor="historyChoice-keep" className="font-normal leading-snug">
+                Keep my RV Match history from this browser — carry over my swipes, saves, and preferences.
+              </Label>
+            </div>
+            <div className="flex items-start gap-2">
+              <RadioGroupItem value="fresh" id="historyChoice-fresh" className="mt-0.5" />
+              <Label htmlFor="historyChoice-fresh" className="font-normal leading-snug">
+                Start fresh — don&apos;t attach this browser&apos;s prior activity to my new account.
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+      )}
       {state.error && (
         <p role="alert" className="text-sm text-destructive">
           {state.error}

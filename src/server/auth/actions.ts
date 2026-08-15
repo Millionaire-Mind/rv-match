@@ -7,7 +7,7 @@ import { db } from "@/server/db/client";
 import { consumerProfiles, dealershipUsers, profiles } from "@/server/db/schema";
 import { signInSchema, signUpSchema } from "@/server/validation/auth";
 import { authSignIn, authSignOut, authSignUp, AuthError } from "./provider";
-import { getOrCreateAnonymousSessionId } from "./anonymous";
+import { getOrCreateAnonymousSessionId, resetAnonymousSessionForFreshStart } from "./anonymous";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { getClientIp } from "@/server/security/client-ip";
 import { logError } from "@/server/logging/log";
@@ -80,7 +80,16 @@ export async function signUpAction(
     return { error: "Could not create your account." };
   }
 
-  await mergeAnonymousHistory(userId);
+  // Gap 12: an explicit choice, not a forced default - "fresh" rotates to
+  // a brand-new anonymous session so no prior shopping history attaches;
+  // anything else (including a missing/unrecognized value) keeps the
+  // existing merge-in behavior, matching how this worked before the choice
+  // existed.
+  if (formData.get("historyChoice") === "fresh") {
+    await resetAnonymousSessionForFreshStart();
+  } else {
+    await mergeAnonymousHistory(userId);
+  }
   const destination = await resolvePostLoginDestination(userId);
   redirect(destination);
 }

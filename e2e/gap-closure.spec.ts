@@ -514,3 +514,54 @@ test.describe("Gap 11: First-10,000 funnel completeness and segmentation", () =>
     }
   });
 });
+
+test.describe("Gap 12: anonymous-history merge choice at signup", () => {
+  test("choosing 'Keep my RV Match history' (the default) carries a saved RV over into the new account", async ({
+    page,
+  }) => {
+    await page.goto("/discover");
+    await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+    const title = await page.locator("h2").first().textContent();
+
+    await page.getByRole("button", { name: /^Save$/ }).click();
+    await expect(page.getByRole("button", { name: "Remove from saved" })).toBeVisible({ timeout: 10000 });
+
+    const email = `e2e-gap12-keep-${Date.now()}@example.com`;
+    await page.goto("/signup");
+    // The default radio selection is "Keep" - deliberately not touched here.
+    await page.getByLabel("Full name").fill("E2E Keep History");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await page.waitForURL(/\/saved/, { timeout: 15000 });
+
+    await expect(page.getByText(title!.split(" ").slice(1).join(" "), { exact: false })).toBeVisible({
+      timeout: 10000,
+    });
+  });
+
+  test("choosing 'Start fresh' does not carry the saved RV over - the new account genuinely starts empty", async ({
+    page,
+  }) => {
+    await page.goto("/discover");
+    await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
+
+    await page.getByRole("button", { name: /^Save$/ }).click();
+    await expect(page.getByRole("button", { name: "Remove from saved" })).toBeVisible({ timeout: 10000 });
+    await page.goto("/saved");
+    await expect(page.getByText("No saved RVs yet")).not.toBeVisible();
+
+    const email = `e2e-gap12-fresh-${Date.now()}@example.com`;
+    await page.goto("/signup");
+    await page.getByLabel(/Start fresh/i).check();
+    await page.getByLabel("Full name").fill("E2E Fresh Start");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await page.waitForURL(/\/saved/, { timeout: 15000 });
+
+    // A genuinely fresh account has no saved RVs - the prior anonymous
+    // save must not have attached to it.
+    await expect(page.getByText("No saved RVs yet")).toBeVisible({ timeout: 10000 });
+  });
+});

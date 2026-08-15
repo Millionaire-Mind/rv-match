@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
 import { anonymousSessions, consumerProfiles, profiles } from "@/server/db/schema";
-import { ANONYMOUS_COOKIE_NAME, PENDING_ATTRIBUTION_COOKIE_NAME } from "./session-cookie";
+import { ANONYMOUS_COOKIE_MAX_AGE, ANONYMOUS_COOKIE_NAME, PENDING_ATTRIBUTION_COOKIE_NAME } from "./session-cookie";
 import { authGetUserId } from "./provider";
 
 interface PendingAttribution {
@@ -82,6 +82,31 @@ export async function getOrCreateAnonymousSessionId(attribution?: {
     .returning({ id: anonymousSessions.id });
 
   return row.id;
+}
+
+/**
+ * Gap 12: honors an explicit "start fresh" choice at signup by rotating
+ * the anonymous-session cookie to a brand-new, unrelated session rather
+ * than merging the browser's prior shopping history. The old anonymous
+ * session and its consumer_profiles row are left exactly as they are
+ * (not deleted, not merged into anyone) - simply no longer reachable from
+ * this browser, so getOrCreateConsumerProfileId's own lazy-merge fallback
+ * (which runs on this new user's very next request) resolves through the
+ * new, empty session and creates a genuinely fresh profile instead of
+ * re-discovering and re-attaching the old one. Only ever called from a
+ * Server Action (signUpAction), where cookie mutation is legal.
+ */
+export async function resetAnonymousSessionForFreshStart(): Promise<void> {
+  const cookieStore = await cookies();
+  const newId = crypto.randomUUID();
+  await db.insert(anonymousSessions).values({ id: newId });
+  cookieStore.set(ANONYMOUS_COOKIE_NAME, newId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: ANONYMOUS_COOKIE_MAX_AGE,
+  });
 }
 
 /**
